@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>StructuredJson</PackageId>
+        <PackageVersion>2.0.0</PackageVersion>
+        <Authors>StructuredJson Contributors</Authors>
+        <Description>A modern .NET library for creating, reading, and updating JSON objects using path-based API with Dictionary&lt;string, object&gt; backend and System.Text.Json serialization. Compatible with .NET 8.0 and .NET 9.0.</Description>
+        <PackageTags>json;path;dictionary;serialization;dotnet;modern</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryUrl>https://github.com/your-repo/StructuredJson</RepositoryUrl>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+        <PackageReference Include="System.Text.Json" Version="9.0.0" />
+    </ItemGroup>
+
+</Project>
