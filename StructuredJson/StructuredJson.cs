@@ -379,8 +379,6 @@ namespace StructuredJson
                 var arrayValue = array[segment.ArrayIndex];
                 if (arrayValue is Dictionary<string, object?> nestedDict)
                     return PathExists(nestedDict, pathSegments.Skip(1).ToList());
-                
-                return false;
             }
             else
             {
@@ -390,9 +388,9 @@ namespace StructuredJson
                 var value = data[segment.Key];
                 if (value is Dictionary<string, object?> nestedDict)
                     return PathExists(nestedDict, pathSegments.Skip(1).ToList());
-                
-                return false;
             }
+
+            return false;
         }
 
         private bool RemoveValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments)
@@ -417,33 +415,27 @@ namespace StructuredJson
                     }
                     return false;
                 }
-                else
-                {
-                    return data.Remove(segment.Key);
-                }
+
+                return data.Remove(segment.Key);
+            }
+
+            if (segment.IsArray)
+            {
+                if (!(data[segment.Key] is List<object?> array) || segment.ArrayIndex >= array.Count || segment.ArrayIndex < 0)
+                    return false;
+
+                var arrayValue = array[segment.ArrayIndex];
+                if (arrayValue is Dictionary<string, object?> nestedDict)
+                    return RemoveValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
             }
             else
             {
-                if (segment.IsArray)
-                {
-                    if (!(data[segment.Key] is List<object?> array) || segment.ArrayIndex >= array.Count || segment.ArrayIndex < 0)
-                        return false;
-
-                    var arrayValue = array[segment.ArrayIndex];
-                    if (arrayValue is Dictionary<string, object?> nestedDict)
-                        return RemoveValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
-                    
-                    return false;
-                }
-                else
-                {
-                    var value = data[segment.Key];
-                    if (value is Dictionary<string, object?> nestedDict)
-                        return RemoveValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
-                    
-                    return false;
-                }
+                var value = data[segment.Key];
+                if (value is Dictionary<string, object?> nestedDict)
+                    return RemoveValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
             }
+
+            return false;
         }
 
         private void EnsureArrayExists(Dictionary<string, object?> data, string key, int index)
