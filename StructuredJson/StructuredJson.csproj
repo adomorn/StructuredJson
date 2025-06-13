@@ -1,21 +1,48 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
+        <TargetFrameworks>netstandard2.0;net8.0;net9.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        
+        <!-- Package Information -->
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <PackageId>StructuredJson</PackageId>
-        <PackageVersion>2.0.0</PackageVersion>
-        <Authors>StructuredJson Contributors</Authors>
-        <Description>A modern .NET library for creating, reading, and updating JSON objects using path-based API with Dictionary&lt;string, object&gt; backend and System.Text.Json serialization. Compatible with .NET 8.0 and .NET 9.0.</Description>
-        <PackageTags>json;path;dictionary;serialization;dotnet;modern</PackageTags>
+        <Version>1.0.0</Version>
+        <Authors>Arda Terekeci</Authors>
+        <Company>Arda Terekeci</Company>
+        <Description>A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Built with `Dictionary&lt;string, object?&gt;` as the underlying data structure and `System.Text.Json` for serialization.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <RepositoryUrl>https://github.com/your-repo/StructuredJson</RepositoryUrl>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>icon.png</PackageIcon>
+        <RepositoryUrl>https://github.com/adomorn/StructuredJson</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>json;path;dictionary;serialization;deserialization;dotnet;netstandard;net8;net9</PackageTags>
+        <PackageReleaseNotes>See CHANGELOG.md for release notes</PackageReleaseNotes>
+        
+        <!-- Documentation -->
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        
+        <!-- Source Link -->
+        <SourceLinkCreate>true</SourceLinkCreate>
+        <SourceLinkOriginUrl>https://github.com/adomorn/StructuredJson</SourceLinkOriginUrl>
+        
+        <!-- CI/CD -->
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <Deterministic>true</Deterministic>
     </PropertyGroup>
+
     <ItemGroup>
-        <PackageReference Include="System.Text.Json" Version="9.0.6" />
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\icon.png" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+        <PackageReference Include="System.Text.Json" Version="9.0.0" />
     </ItemGroup>
 
 </Project>

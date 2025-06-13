@@ -8,7 +8,7 @@ A powerful .NET library for creating, reading, and updating JSON objects using a
 ## Features
 
 - **Path-based API**: Use intuitive path syntax to navigate and manipulate JSON structures
-- **Multi-target Support**: Compatible with .NET Standard 2.0, .NET 8, and .NET 9
+- **.NET Standard 2.0**: Compatible with all modern .NET platforms
 - **System.Text.Json**: Uses the modern, high-performance JSON serializer
 - **Type Safety**: Generic methods with intelligent type conversion for strongly-typed value retrieval
 - **Comprehensive**: Full CRUD operations with path validation and robust error handling
@@ -377,7 +377,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Version 1.0.0
 - Initial release
 - Path-based JSON manipulation API
-- Support for .NET Standard 2.0, .NET 8, and .NET 9
+- Support for .NET Standard 2.0
 - Intelligent type conversion system
 - Comprehensive path validation
 - Sparse array support

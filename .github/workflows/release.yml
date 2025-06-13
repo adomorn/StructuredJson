@@ -1,0 +1,83 @@
+name: Release NuGet Package
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'StructuredJson/**'
+      - '.github/workflows/release.yml'
+      - 'CHANGELOG.md'
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for version changes
+        id: check
+        uses: TriPSs/conventional-changelog-action@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-file: './StructuredJson/StructuredJson.csproj'
+          skip-version-file: true
+          skip-commit: true
+          skip-tag: true
+          release-count: 0
+          output-file: 'version.txt'
+
+      - name: Read version
+        id: read_version
+        run: echo "version=$(cat version.txt)" >> $GITHUB_OUTPUT
+
+  build-and-publish:
+    needs: version-check
+    if: needs.version-check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release
+
+      - name: Update version in csproj
+        run: |
+          VERSION="${{ needs.version-check.outputs.version }}"
+          sed -i "s/<Version>.*<\/Version>/<Version>${VERSION}<\/Version>/" StructuredJson/StructuredJson.csproj
+          echo "Updated version to ${VERSION}"
+
+      - name: Pack
+        run: dotnet pack --no-build --configuration Release
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v${{ needs.version-check.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: bin/Release/StructuredJson.*.nupkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to NuGet
+        run: dotnet nuget push bin/Release/StructuredJson.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json 
