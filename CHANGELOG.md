@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite
 - XML documentation
 - GitHub Actions workflow for automated releases
+- Cross-platform compatibility improvements
 
 ### Changed
 - None
