@@ -9,6 +9,12 @@ on:
       - '.github/workflows/release.yml'
       - 'CHANGELOG.md'
 
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+
 jobs:
   version-check:
     runs-on: ubuntu-latest
@@ -31,6 +37,9 @@ jobs:
           skip-tag: true
           release-count: 0
           output-file: 'version.txt'
+          git-message: 'chore(release): {version}'
+          git-user-name: 'github-actions[bot]'
+          git-user-email: 'github-actions[bot]@users.noreply.github.com'
 
       - name: Read version
         id: read_version
