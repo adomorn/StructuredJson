@@ -6,7 +6,7 @@
         <Version>1.0.0</Version>
         <Authors>Arda Terekeci</Authors>
         <Company>Arda Terekeci</Company>
-        <Description>A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Built with `Dictionary&lt;string, object?&gt;` as the underlying data structure and `System.Text.Json` for serialization.</Description>
+        <Description>A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Built with `Dictionary&lt;string, object?&gt;` as the underlying data structure and `System.Text.Json` for serialization. Supports cross-platform compatibility.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageIcon>icon.png</PackageIcon>
