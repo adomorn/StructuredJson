@@ -1,8 +1,21 @@
+#if NET8_0_OR_GREATER
+// Global usings are enabled for .NET 8+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+#else
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+#endif
+
+#if NET8_0_OR_GREATER
+#nullable enable
+#endif
 
 namespace StructuredJson
 {
@@ -12,14 +25,22 @@ namespace StructuredJson
     /// </summary>
     public class StructuredJson
     {
+#if NET8_0_OR_GREATER
         private readonly Dictionary<string, object?> _data;
+#else
+        private readonly Dictionary<string, object> _data;
+#endif
 
         /// <summary>
         /// Initializes a new instance of the StructuredJson class with an empty data structure.
         /// </summary>
         public StructuredJson()
         {
+#if NET8_0_OR_GREATER
             _data = new Dictionary<string, object?>();
+#else
+            _data = new Dictionary<string, object>();
+#endif
         }
 
         /// <summary>
@@ -29,7 +50,11 @@ namespace StructuredJson
         /// <exception cref="ArgumentException">Thrown when the JSON string is invalid.</exception>
         public StructuredJson(string json)
         {
+#if NET8_0_OR_GREATER
             _data = new Dictionary<string, object?>();
+#else
+            _data = new Dictionary<string, object>();
+#endif
             if (!string.IsNullOrWhiteSpace(json))
             {
                 try
@@ -51,7 +76,11 @@ namespace StructuredJson
         /// <param name="path">The path where to set the value.</param>
         /// <param name="value">The value to set.</param>
         /// <exception cref="ArgumentException">Thrown when the path is null or empty.</exception>
+#if NET8_0_OR_GREATER
         public void Set(string path, object? value)
+#else
+        public void Set(string path, object value)
+#endif
         {
             if (string.IsNullOrEmpty(path))
                 throw new ArgumentException("Path cannot be null or empty.", nameof(path));
@@ -66,7 +95,11 @@ namespace StructuredJson
         /// <param name="path">The path to retrieve the value from.</param>
         /// <returns>The value at the specified path, or null if the path doesn't exist.</returns>
         /// <exception cref="ArgumentException">Thrown when the path is null or empty.</exception>
+#if NET8_0_OR_GREATER
         public object? Get(string path)
+#else
+        public object Get(string path)
+#endif
         {
             if (string.IsNullOrEmpty(path))
                 throw new ArgumentException("Path cannot be null or empty.", nameof(path));
@@ -81,7 +114,11 @@ namespace StructuredJson
         /// <typeparam name="T">The type to cast the value to.</typeparam>
         /// <param name="path">The path to retrieve the value from.</param>
         /// <returns>The value at the specified path cast to type T, or default(T) if the path doesn't exist or casting fails.</returns>
+#if NET8_0_OR_GREATER
         public T? Get<T>(string path)
+#else
+        public T Get<T>(string path)
+#endif
         {
             var value = Get(path);
             if (value == null)
@@ -93,7 +130,7 @@ namespace StructuredJson
                 {
                     return JsonSerializer.Deserialize<T>(jsonElement.GetRawText());
                 }
-                
+
                 if (value is T directValue)
                     return directValue;
 
@@ -119,7 +156,11 @@ namespace StructuredJson
                 // Number to string conversions
                 if (underlyingType == typeof(string) && IsNumericType(value.GetType()))
                 {
+#if NET8_0_OR_GREATER
                     return (T)(object)value.ToString()!;
+#else
+                    return (T)(object)value.ToString();
+#endif
                 }
 
                 // Try to convert using JsonSerializer for complex types
@@ -137,9 +178,13 @@ namespace StructuredJson
         /// </summary>
         /// <param name="options">JSON serializer options for formatting.</param>
         /// <returns>A JSON string representation of the data.</returns>
+#if NET8_0_OR_GREATER
         public string ToJson(JsonSerializerOptions? options = null)
+#else
+        public string ToJson(JsonSerializerOptions options = null)
+#endif
         {
-            options ??= new JsonSerializerOptions { WriteIndented = true };
+            options = options ?? new JsonSerializerOptions { WriteIndented = true };
             return JsonSerializer.Serialize(_data, options);
         }
 
@@ -147,9 +192,15 @@ namespace StructuredJson
         /// Lists all paths and their corresponding values in the data structure.
         /// </summary>
         /// <returns>A dictionary containing all path-value pairs.</returns>
+#if NET8_0_OR_GREATER
         public Dictionary<string, object?> ListPaths()
         {
             var result = new Dictionary<string, object?>();
+#else
+        public Dictionary<string, object> ListPaths()
+        {
+            var result = new Dictionary<string, object>();
+#endif
             BuildPathList(_data, "", result);
             return result;
         }
@@ -225,22 +276,25 @@ namespace StructuredJson
                     if (match.Groups[3].Success)
                     {
                         var indexString = match.Groups[3].Value;
-                        
+
                         // Check for empty array index
                         if (string.IsNullOrEmpty(indexString))
                             throw new ArgumentException($"Empty array index in path: '{part}'", nameof(path));
-                        
+
                         // Check for invalid array index format
                         if (!int.TryParse(indexString, out int index))
-                            throw new ArgumentException($"Invalid array index '{indexString}' in path: '{part}'", nameof(path));
-                        
+                            throw new ArgumentException($"Invalid array index '{indexString}' in path: '{part}'",
+                                nameof(path));
+
                         // Check for negative array index
                         if (index < 0)
-                            throw new ArgumentException($"Negative array index '{index}' in path: '{part}'", nameof(path));
-                        
+                            throw new ArgumentException($"Negative array index '{index}' in path: '{part}'",
+                                nameof(path));
+
                         // Check for multiple array indices (like [0][1])
                         if (part.Count(c => c == '[') > 1)
-                            throw new ArgumentException($"Multiple array indices not supported in path: '{part}'", nameof(path));
+                            throw new ArgumentException($"Multiple array indices not supported in path: '{part}'",
+                                nameof(path));
 
                         segments.Add(new PathSegment { Key = key, IsArray = true, ArrayIndex = index });
                     }
@@ -261,272 +315,350 @@ namespace StructuredJson
             return segments;
         }
 
+#if NET8_0_OR_GREATER
         private void SetValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments, object? value)
+#else
+        private void SetValueAtPath(Dictionary<string, object> data, List<PathSegment> pathSegments, object value)
+#endif
         {
-            if (pathSegments.Count == 0)
-                return;
-
-            var segment = pathSegments[0];
-            var isLastSegment = pathSegments.Count == 1;
-
-            if (isLastSegment)
+            for (int i = 0; i < pathSegments.Count; i++)
             {
+                var segment = pathSegments[i];
+                var isLastSegment = i == pathSegments.Count - 1;
+
                 if (segment.IsArray)
                 {
                     EnsureArrayExists(data, segment.Key, segment.ArrayIndex);
-                    if (data[segment.Key] is List<object?> array)
+                    var list = (List<object>)data[segment.Key]!;
+
+                    if (isLastSegment)
                     {
-                        array[segment.ArrayIndex] = value;
+                        list[segment.ArrayIndex] = value!;
+                    }
+                    else
+                    {
+                        if (list[segment.ArrayIndex] == null)
+                        {
+#if NET8_0_OR_GREATER
+                            list[segment.ArrayIndex] = new Dictionary<string, object?>();
+#else
+                            list[segment.ArrayIndex] = new Dictionary<string, object>();
+#endif
+                        }
+
+#if NET8_0_OR_GREATER
+                        if (!(list[segment.ArrayIndex] is Dictionary<string, object?> nextData))
+                        {
+                            list[segment.ArrayIndex] = new Dictionary<string, object?>();
+                            nextData = (Dictionary<string, object?>)list[segment.ArrayIndex]!;
+                        }
+                        data = nextData;
+#else
+                        if (!(list[segment.ArrayIndex] is Dictionary<string, object> nextData))
+                        {
+                            list[segment.ArrayIndex] = new Dictionary<string, object>();
+                            nextData = (Dictionary<string, object>)list[segment.ArrayIndex]!;
+                        }
+                        data = nextData;
+#endif
                     }
                 }
                 else
                 {
-                    data[segment.Key] = value;
-                }
-            }
-            else
-            {
-                if (segment.IsArray)
-                {
-                    EnsureArrayExists(data, segment.Key, segment.ArrayIndex);
-                    if (data[segment.Key] is List<object?> array)
+                    if (isLastSegment)
                     {
-                        if (array[segment.ArrayIndex] == null || !(array[segment.ArrayIndex] is Dictionary<string, object?>))
-                        {
-                            array[segment.ArrayIndex] = new Dictionary<string, object?>();
-                        }
-                        
-                        if (array[segment.ArrayIndex] is Dictionary<string, object?> nestedDict)
-                        {
-                            SetValueAtPath(nestedDict, pathSegments.Skip(1).ToList(), value);
-                        }
+                        data[segment.Key] = value;
                     }
-                }
-                else
-                {
-                    if (!data.ContainsKey(segment.Key) || !(data[segment.Key] is Dictionary<string, object?>))
+                    else
                     {
-                        data[segment.Key] = new Dictionary<string, object?>();
-                    }
-                    
-                    if (data[segment.Key] is Dictionary<string, object?> nestedDict)
-                    {
-                        SetValueAtPath(nestedDict, pathSegments.Skip(1).ToList(), value);
+                        if (!data.ContainsKey(segment.Key) || data[segment.Key] == null)
+                        {
+#if NET8_0_OR_GREATER
+                            data[segment.Key] = new Dictionary<string, object?>();
+#else
+                            data[segment.Key] = new Dictionary<string, object>();
+#endif
+                        }
+
+#if NET8_0_OR_GREATER
+                        if (!(data[segment.Key] is Dictionary<string, object?> nextData))
+                        {
+                            data[segment.Key] = new Dictionary<string, object?>();
+                            nextData = (Dictionary<string, object?>)data[segment.Key]!;
+                        }
+                        data = nextData;
+#else
+                        if (!(data[segment.Key] is Dictionary<string, object> nextData))
+                        {
+                            data[segment.Key] = new Dictionary<string, object>();
+                            nextData = (Dictionary<string, object>)data[segment.Key]!;
+                        }
+                        data = nextData;
+#endif
                     }
                 }
             }
         }
 
+#if NET8_0_OR_GREATER
         private object? GetValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments)
+#else
+        private object GetValueAtPath(Dictionary<string, object> data, List<PathSegment> pathSegments)
+#endif
         {
-            if (pathSegments.Count == 0)
-                return null;
-
-            var segment = pathSegments[0];
-            var isLastSegment = pathSegments.Count == 1;
-
-            if (!data.ContainsKey(segment.Key))
-                return null;
-
-            if (segment.IsArray)
+            foreach (var segment in pathSegments)
             {
-                if (!(data[segment.Key] is List<object?> array) || segment.ArrayIndex >= array.Count || segment.ArrayIndex < 0)
+                if (!data.ContainsKey(segment.Key))
                     return null;
 
-                var arrayValue = array[segment.ArrayIndex];
-                
-                if (isLastSegment)
-                    return arrayValue;
-
-                if (arrayValue is Dictionary<string, object?> nestedDict)
-                    return GetValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
-                
-                return null;
-            }
-            else
-            {
                 var value = data[segment.Key];
-                
-                if (isLastSegment)
-                    return value;
+                if (value == null)
+                    return null;
 
-                if (value is Dictionary<string, object?> nestedDict)
-                    return GetValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
-                
-                return null;
-            }
-        }
-
-        private bool PathExists(Dictionary<string, object?> data, List<PathSegment> pathSegments)
-        {
-            if (pathSegments.Count == 0)
-                return true;
-
-            var segment = pathSegments[0];
-            var isLastSegment = pathSegments.Count == 1;
-
-            if (!data.ContainsKey(segment.Key))
-                return false;
-
-            if (segment.IsArray)
-            {
-                if (!(data[segment.Key] is List<object?> array) || segment.ArrayIndex >= array.Count || segment.ArrayIndex < 0)
-                    return false;
-
-                if (isLastSegment)
-                    return true;
-
-                var arrayValue = array[segment.ArrayIndex];
-                if (arrayValue is Dictionary<string, object?> nestedDict)
-                    return PathExists(nestedDict, pathSegments.Skip(1).ToList());
-            }
-            else
-            {
-                if (isLastSegment)
-                    return true;
-
-                var value = data[segment.Key];
-                if (value is Dictionary<string, object?> nestedDict)
-                    return PathExists(nestedDict, pathSegments.Skip(1).ToList());
-            }
-
-            return false;
-        }
-
-        private bool RemoveValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments)
-        {
-            if (pathSegments.Count == 0)
-                return false;
-
-            var segment = pathSegments[0];
-            var isLastSegment = pathSegments.Count == 1;
-
-            if (!data.ContainsKey(segment.Key))
-                return false;
-
-            if (isLastSegment)
-            {
                 if (segment.IsArray)
                 {
-                    if (data[segment.Key] is List<object?> array && segment.ArrayIndex < array.Count && segment.ArrayIndex >= 0)
-                    {
-                        array.RemoveAt(segment.ArrayIndex);
-                        return true;
-                    }
-                    return false;
+                    if (!(value is List<object> list))
+                        return null;
+
+                    if (segment.ArrayIndex >= list.Count)
+                        return null;
+
+                    value = list[segment.ArrayIndex];
+                    if (value == null)
+                        return null;
                 }
 
-                return data.Remove(segment.Key);
+                if (segment != pathSegments.Last())
+                {
+#if NET8_0_OR_GREATER
+                    if (!(value is Dictionary<string, object?> nextData))
+#else
+                    if (!(value is Dictionary<string, object> nextData))
+#endif
+                        return null;
+                    data = nextData;
+                }
+                else
+                {
+                    return value;
+                }
             }
 
-            if (segment.IsArray)
+            return null;
+        }
+
+#if NET8_0_OR_GREATER
+        private bool PathExists(Dictionary<string, object?> data, List<PathSegment> pathSegments)
+#else
+        private bool PathExists(Dictionary<string, object> data, List<PathSegment> pathSegments)
+#endif
+        {
+            foreach (var segment in pathSegments)
             {
-                if (!(data[segment.Key] is List<object?> array) || segment.ArrayIndex >= array.Count || segment.ArrayIndex < 0)
+                if (!data.ContainsKey(segment.Key))
                     return false;
 
-                var arrayValue = array[segment.ArrayIndex];
-                if (arrayValue is Dictionary<string, object?> nestedDict)
-                    return RemoveValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
+                var value = data[segment.Key];
+
+                if (segment.IsArray)
+                {
+                    if (!(value is List<object> list))
+                        return false;
+
+                    if (segment.ArrayIndex >= list.Count)
+                        return false;
+
+                    // For arrays, we need to check if we're at the last segment
+                    if (segment == pathSegments.Last())
+                        return true; // Path exists even if value is null
+                    
+                    value = list[segment.ArrayIndex];
+                    if (value == null)
+                        return false; // Can't navigate further if intermediate value is null
+                }
+
+                if (segment != pathSegments.Last())
+                {
+                    // For intermediate segments, null means we can't navigate further
+                    if (value == null)
+                        return false;
+                        
+#if NET8_0_OR_GREATER
+                    if (!(value is Dictionary<string, object?> nextData))
+#else
+                    if (!(value is Dictionary<string, object> nextData))
+#endif
+                        return false;
+                    data = nextData;
+                }
+            }
+
+            return true;
+        }
+
+#if NET8_0_OR_GREATER
+        private bool RemoveValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments)
+#else
+        private bool RemoveValueAtPath(Dictionary<string, object> data, List<PathSegment> pathSegments)
+#endif
+        {
+            if (pathSegments.Count == 0)
+                return false;
+
+            var lastSegment = pathSegments.Last();
+            var parentSegments = pathSegments.Take(pathSegments.Count - 1).ToList();
+
+            if (parentSegments.Count > 0)
+            {
+                var parentValue = GetValueAtPath(_data, parentSegments);
+                if (parentValue == null)
+                    return false;
+
+#if NET8_0_OR_GREATER
+                if (!(parentValue is Dictionary<string, object?> parentData))
+#else
+                if (!(parentValue is Dictionary<string, object> parentData))
+#endif
+                    return false;
+
+                data = parentData;
+            }
+
+            if (lastSegment.IsArray)
+            {
+                if (!data.ContainsKey(lastSegment.Key))
+                    return false;
+
+                var value = data[lastSegment.Key];
+                if (!(value is List<object> list))
+                    return false;
+
+                if (lastSegment.ArrayIndex >= list.Count)
+                    return false;
+
+                list.RemoveAt(lastSegment.ArrayIndex);
+                return true;
             }
             else
             {
-                var value = data[segment.Key];
-                if (value is Dictionary<string, object?> nestedDict)
-                    return RemoveValueAtPath(nestedDict, pathSegments.Skip(1).ToList());
+                return data.Remove(lastSegment.Key);
             }
-
-            return false;
         }
 
+#if NET8_0_OR_GREATER
         private void EnsureArrayExists(Dictionary<string, object?> data, string key, int index)
+#else
+        private void EnsureArrayExists(Dictionary<string, object> data, string key, int index)
+#endif
         {
-            if (!data.ContainsKey(key) || !(data[key] is List<object?>))
+            if (!data.ContainsKey(key) || !(data[key] is List<object>))
             {
-                data[key] = new List<object?>();
+                data[key] = new List<object>();
             }
 
-            if (data[key] is List<object?> array)
+            var list = (List<object>)data[key]!;
+            while (list.Count <= index)
             {
-                while (array.Count <= index)
-                {
-                    array.Add(null);
-                }
+                list.Add(null!);
             }
         }
 
-        private void BuildPathList(Dictionary<string, object?> data, string currentPath, Dictionary<string, object?> result)
+#if NET8_0_OR_GREATER
+        private void BuildPathList(Dictionary<string, object?> data, string currentPath,
+            Dictionary<string, object?> result)
+#else
+        private void BuildPathList(Dictionary<string, object> data, string currentPath,
+            Dictionary<string, object> result)
+#endif
         {
             foreach (var kvp in data)
             {
-                var newPath = string.IsNullOrEmpty(currentPath) ? kvp.Key : $"{currentPath}:{kvp.Key}";
+                var path = string.IsNullOrEmpty(currentPath) ? kvp.Key : $"{currentPath}:{kvp.Key}";
 
-                if (kvp.Value is Dictionary<string, object?> nestedDict)
+                if (kvp.Value is List<object> list)
                 {
-                    BuildPathList(nestedDict, newPath, result);
-                }
-                else if (kvp.Value is List<object?> array)
-                {
-                    for (int i = 0; i < array.Count; i++)
+                    for (int i = 0; i < list.Count; i++)
                     {
-                        var arrayPath = $"{newPath}[{i}]";
-                        if (array[i] is Dictionary<string, object?> arrayNestedDict)
+                        var arrayPath = $"{path}[{i}]";
+                        var item = list[i];
+
+                        if (item != null)
                         {
-                            BuildPathList(arrayNestedDict, arrayPath, result);
-                        }
-                        else if (array[i] != null) // Only include non-null values for sparse arrays
-                        {
-                            result[arrayPath] = array[i];
+#if NET8_0_OR_GREATER
+                            if (item is Dictionary<string, object?> nestedDict)
+#else
+                            if (item is Dictionary<string, object> nestedDict)
+#endif
+                            {
+                                BuildPathList(nestedDict, arrayPath, result);
+                            }
+                            else
+                            {
+                                result[arrayPath] = item;
+                            }
                         }
                     }
+                }
+#if NET8_0_OR_GREATER
+                else if (kvp.Value is Dictionary<string, object?> nestedData)
+#else
+                else if (kvp.Value is Dictionary<string, object> nestedData)
+#endif
+                {
+                    BuildPathList(nestedData, path, result);
                 }
                 else
                 {
-                    result[newPath] = kvp.Value; // Include all values, including null for regular properties
+                    result[path] = kvp.Value;
                 }
             }
         }
 
+#if NET8_0_OR_GREATER
         private void PopulateFromJsonElement(JsonElement element, Dictionary<string, object?> target)
+#else
+        private void PopulateFromJsonElement(JsonElement element, Dictionary<string, object> target)
+#endif
         {
             switch (element.ValueKind)
             {
                 case JsonValueKind.Object:
                     foreach (var property in element.EnumerateObject())
                     {
-                        var convertedValue = ConvertJsonElement(property.Value);
-                        target[property.Name] = convertedValue;
+                        target[property.Name] = ConvertJsonElement(property.Value);
                     }
-                    break;
-                case JsonValueKind.Array:
-                    var list = new List<object?>();
-                    foreach (var item in element.EnumerateArray())
-                    {
-                        list.Add(ConvertJsonElement(item));
-                    }
-                    // This case shouldn't happen for root level, but handle it gracefully
                     break;
             }
         }
 
+#if NET8_0_OR_GREATER
         private object? ConvertJsonElement(JsonElement element)
+#else
+        private object ConvertJsonElement(JsonElement element)
+#endif
         {
             switch (element.ValueKind)
             {
                 case JsonValueKind.Object:
-                    var dict = new Dictionary<string, object?>();
+#if NET8_0_OR_GREATER
+                    var obj = new Dictionary<string, object?>();
+#else
+                    var obj = new Dictionary<string, object>();
+#endif
                     foreach (var property in element.EnumerateObject())
                     {
-                        var convertedValue = ConvertJsonElement(property.Value);
-                        dict[property.Name] = convertedValue;
+                        obj[property.Name] = ConvertJsonElement(property.Value);
                     }
-                    return dict;
+                    return obj;
+
                 case JsonValueKind.Array:
-                    var list = new List<object?>();
+                    var array = new List<object>();
                     foreach (var item in element.EnumerateArray())
                     {
-                        list.Add(ConvertJsonElement(item));
+                        array.Add(ConvertJsonElement(item)!);
                     }
-                    return list;
+                    return array;
+
                 case JsonValueKind.String:
                     return element.GetString();
                 case JsonValueKind.Number:
@@ -534,9 +666,7 @@ namespace StructuredJson
                         return intValue;
                     if (element.TryGetInt64(out long longValue))
                         return longValue;
-                    if (element.TryGetDouble(out double doubleValue))
-                        return doubleValue;
-                    return element.GetDecimal();
+                    return element.GetDouble();
                 case JsonValueKind.True:
                     return true;
                 case JsonValueKind.False:
@@ -544,15 +674,15 @@ namespace StructuredJson
                 case JsonValueKind.Null:
                     return null;
                 default:
-                    return element.GetRawText();
+                    return element.Clone();
             }
         }
 
         private static bool IsNumericType(Type type)
         {
-            return type == typeof(int) || type == typeof(long) || type == typeof(double) || 
-                   type == typeof(decimal) || type == typeof(float) || type == typeof(short) || 
-                   type == typeof(byte) || type == typeof(uint) || type == typeof(ulong) || 
+            return type == typeof(int) || type == typeof(long) || type == typeof(double) ||
+                   type == typeof(decimal) || type == typeof(float) || type == typeof(short) ||
+                   type == typeof(byte) || type == typeof(uint) || type == typeof(ulong) ||
                    type == typeof(ushort) || type == typeof(sbyte);
         }
 
@@ -563,4 +693,8 @@ namespace StructuredJson
             public int ArrayIndex { get; set; }
         }
     }
-} 
+}
+
+#if NET8_0_OR_GREATER
+#nullable restore
+#endif
