@@ -26,19 +26,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for version changes
+      - name: Set release version
         id: check
-        uses: TriPSs/conventional-changelog-action@v3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          version-file: './StructuredJson/StructuredJson.csproj'
-          skip-version-file: true
-          skip-commit: true
-          skip-tag: true
-          release-count: 0
-          git-message: 'chore(release): {version}'
-          git-user-name: 'github-actions[bot]'
-          git-user-email: 'github-actions[bot]@users.noreply.github.com'
+        run: |
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "version=1.0.0" >> $GITHUB_OUTPUT
+          echo "First release - triggering version 1.0.0"
 
   build-and-publish:
     needs: version-check
