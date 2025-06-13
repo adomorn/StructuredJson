@@ -36,14 +36,9 @@ jobs:
           skip-commit: true
           skip-tag: true
           release-count: 0
-          output-file: 'version.txt'
           git-message: 'chore(release): {version}'
           git-user-name: 'github-actions[bot]'
           git-user-email: 'github-actions[bot]@users.noreply.github.com'
-
-      - name: Read version
-        id: read_version
-        run: echo "version=$(cat version.txt)" >> $GITHUB_OUTPUT
 
   build-and-publish:
     needs: version-check
@@ -80,13 +75,14 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: v${{ needs.version-check.outputs.version }}
           name: Release v${{ needs.version-check.outputs.version }}
           body_path: CHANGELOG.md
           draft: false
           prerelease: false
-          files: bin/Release/StructuredJson.*.nupkg
+          files: StructuredJson/bin/Release/StructuredJson.*.nupkg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to NuGet
-        run: dotnet nuget push bin/Release/StructuredJson.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json 
+        run: dotnet nuget push StructuredJson/bin/Release/StructuredJson.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json 
