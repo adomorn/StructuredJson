@@ -3,6 +3,7 @@
 [![NuGet Version](https://img.shields.io/nuget/v/StructuredJson.svg)](https://www.nuget.org/packages/StructuredJson/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-Standard%202.0%20%7C%208.0%20%7C%209.0-purple.svg)](https://dotnet.microsoft.com/)
+[![Release NuGet Package](https://github.com/adomorn/StructuredJson/actions/workflows/release.yml/badge.svg)](https://github.com/adomorn/StructuredJson/actions/workflows/release.yml)
 
 A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Built with `Dictionary<string, object?>` as the underlying data structure and `System.Text.Json` for modern, high-performance serialization.
 
