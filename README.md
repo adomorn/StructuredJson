@@ -469,4 +469,4 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes and version hist
 
 ---
 
-**Made with ❤️ for the .NET community** 
+**Made with ❤️ for the .NET** 
