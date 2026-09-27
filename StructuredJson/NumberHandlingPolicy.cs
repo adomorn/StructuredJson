@@ -10,46 +10,62 @@ internal static class NumberHandlingPolicy
 {
     internal static void Configure(JsonSerializerOptions options)
     {
-        options.TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver()).WithAddedModifier(info =>
-        {
-            if (info.Converter is IScopedNumberHandlingConverter)
-                info.NumberHandling = JsonNumberHandling.Strict;
-            else if (info.Kind is JsonTypeInfoKind.Enumerable or JsonTypeInfoKind.Dictionary &&
-                info.Options.Converters.OfType<CollectionNumberHandlingFactory>().Any(factory => factory.ExcludedType == info.Type))
-                info.NumberHandling = info.Options.NumberHandling;
-            if (info.Kind != JsonTypeInfoKind.Object) return;
-            foreach (var property in info.Properties)
-            {
-                // Extension data uses STJ's dictionary population contract and holds
-                // raw JSON values, so it must not become a normal property converter.
-                if (property.IsExtensionData) continue;
-                // A member override applies to that value, not unrelated members of
-                // nested POCOs. Restore the caller's global policy at object contracts.
-                var handling = property.NumberHandling ?? info.NumberHandling ??
-                    (info.Options.NumberHandling != options.NumberHandling ? options.NumberHandling : (JsonNumberHandling?)null);
-                var underlying = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                bool numeric = underlying == typeof(Half) || (!underlying.IsEnum && Type.GetTypeCode(underlying) is >= TypeCode.SByte and <= TypeCode.Decimal);
-                bool relevant = numeric || underlying == typeof(object) ||
-                    (underlying != typeof(string) && typeof(IEnumerable).IsAssignableFrom(underlying));
-                if (!relevant || property.CustomConverter is not null || HasExplicitConverter(info.Options, property.PropertyType)) continue;
-                var creation = property.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? info.Options.PreferredObjectCreationHandling;
-                bool scopedType = info.Options.Converters.OfType<CollectionNumberHandlingFactory>().Any(factory => factory.CanConvert(property.PropertyType));
-                if (creation == JsonObjectCreationHandling.Populate && typeof(IEnumerable).IsAssignableFrom(underlying) && (handling is not null || scopedType))
-                    throw new NotSupportedException("Populate cannot be combined with scoped number handling on a collection. Use Replace with a writable property.");
-                if (handling is null) continue;
-                // STJ does not pass member-level NumberHandling into custom converters.
-                // Re-enter this property's declared contract with scoped global settings.
-                property.CustomConverter = (JsonConverter)Activator.CreateInstance(
-                    typeof(ScopedNumberHandlingConverter<>).MakeGenericType(property.PropertyType), handling.Value)!;
-                // The scoped converter owns these flags now. Strict also prevents
-                // inheriting type-level flags that STJ rejects on custom collections.
-                property.NumberHandling = JsonNumberHandling.Strict;
-            }
-        });
+        options.TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
+            .WithAddedModifier(info => ConfigureType(info, options.NumberHandling));
         options.Converters.Add(new CollectionNumberHandlingFactory());
         options.Converters.Add(new FiniteDoubleConverter());
         options.Converters.Add(new FiniteSingleConverter());
         options.Converters.Add(new FiniteHalfConverter());
+    }
+
+    private static void ConfigureType(JsonTypeInfo info, JsonNumberHandling globalHandling)
+    {
+        if (info.Converter is IScopedNumberHandlingConverter)
+            info.NumberHandling = JsonNumberHandling.Strict;
+        else if (info.Kind is JsonTypeInfoKind.Enumerable or JsonTypeInfoKind.Dictionary &&
+            info.Options.Converters.OfType<CollectionNumberHandlingFactory>().Any(factory => factory.ExcludedType == info.Type))
+            info.NumberHandling = info.Options.NumberHandling;
+        if (info.Kind != JsonTypeInfoKind.Object) return;
+        foreach (var property in info.Properties) ConfigureProperty(info, property, globalHandling);
+    }
+
+    private static void ConfigureProperty(JsonTypeInfo info, JsonPropertyInfo property, JsonNumberHandling globalHandling)
+    {
+        // Extension data uses STJ's dictionary population contract and holds
+        // raw JSON values, so it must not become a normal property converter.
+        if (property.IsExtensionData) return;
+        // STJ removes both accessors from ignored members. Their creation and
+        // number policies must not affect the containing object's contract.
+        if (property.Get is null && property.Set is null) return;
+        var underlying = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!SupportsScopedHandling(underlying) || property.CustomConverter is not null || HasExplicitConverter(info.Options, property.PropertyType)) return;
+        // A member override applies to that value, not unrelated members of
+        // nested POCOs. Restore the caller's global policy at object contracts.
+        var handling = property.NumberHandling ?? info.NumberHandling ??
+            (info.Options.NumberHandling != globalHandling ? globalHandling : (JsonNumberHandling?)null);
+        ValidateCreationHandling(info, property, underlying, handling);
+        if (handling is null) return;
+        // STJ does not pass member-level NumberHandling into custom converters.
+        // Re-enter this property's declared contract with scoped global settings.
+        property.CustomConverter = (JsonConverter)Activator.CreateInstance(
+            typeof(ScopedNumberHandlingConverter<>).MakeGenericType(property.PropertyType), handling.Value)!;
+        // The scoped converter owns these flags now. Strict also prevents
+        // inheriting type-level flags that STJ rejects on custom collections.
+        property.NumberHandling = JsonNumberHandling.Strict;
+    }
+
+    private static bool SupportsScopedHandling(Type type)
+    {
+        bool numeric = type == typeof(Half) || (!type.IsEnum && Type.GetTypeCode(type) is >= TypeCode.SByte and <= TypeCode.Decimal);
+        return numeric || type == typeof(object) || (type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type));
+    }
+
+    private static void ValidateCreationHandling(JsonTypeInfo info, JsonPropertyInfo property, Type underlying, JsonNumberHandling? handling)
+    {
+        var creation = property.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? info.Options.PreferredObjectCreationHandling;
+        bool scopedType = info.Options.Converters.OfType<CollectionNumberHandlingFactory>().Any(factory => factory.CanConvert(property.PropertyType));
+        if (creation == JsonObjectCreationHandling.Populate && typeof(IEnumerable).IsAssignableFrom(underlying) && (handling is not null || scopedType))
+            throw new NotSupportedException("Populate cannot be combined with scoped number handling on a collection. Use Replace with a writable property.");
     }
 
     internal static bool HasExplicitConverter(JsonSerializerOptions options, Type type)

@@ -2,15 +2,18 @@
 """Install the locally built package into an isolated consumer; never accidentally use NuGet.org's copy."""
 import argparse
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dotnet', default='dotnet')
 parser.add_argument('--artifacts', default='artifacts')
 args = parser.parse_args()
+dotnet = shutil.which('dotnet')
+if dotnet is None:
+    raise SystemExit('Install the SDK pinned in global.json and put dotnet on PATH.')
 root = pathlib.Path(__file__).resolve().parents[1]
 version = ET.parse(root / 'StructuredJson/StructuredJson.csproj').findtext('.//Version')
 artifacts = (root / args.artifacts).resolve()
@@ -38,9 +41,10 @@ with tempfile.TemporaryDirectory(prefix='structuredjson-package-') as temp:
     for name, value in [('OutputType', 'Exe'), ('TargetFrameworks', ';'.join(frameworks)), ('ImplicitUsings', 'enable')]:
         ET.SubElement(group, name).text = value
     ET.SubElement(ET.SubElement(project, 'ItemGroup'), 'PackageReference', Include='StructuredJson', Version=version)
-    ET.ElementTree(project).write(consumer / 'Consumer.csproj', encoding='unicode')
+    project_path = consumer / 'Consumer.csproj'
+    ET.ElementTree(project).write(project_path, encoding='unicode')
     (consumer / 'Program.cs').write_text((root / 'examples/StructuredJson.Example/Program.cs').read_text())
-    subprocess.run([args.dotnet, 'restore', str(consumer / 'Consumer.csproj'), '--packages', str(consumer / 'packages'), '--configfile', str(consumer / 'NuGet.Config')], cwd=root, check=True)
+    subprocess.run([dotnet, 'restore', str(project_path), '--packages', str(consumer / 'packages'), '--configfile', str(consumer / 'NuGet.Config')], cwd=root, check=True)
     for framework in frameworks:
-        subprocess.run([args.dotnet, 'run', '--project', str(consumer / 'Consumer.csproj'), '-f', framework, '-c', 'Release', '--no-restore', '--disable-build-servers'], cwd=root, check=True)
+        subprocess.run([dotnet, 'run', '--project', str(project_path), '-f', framework, '-c', 'Release', '--no-restore', '--disable-build-servers'], cwd=root, check=True)
         print('PACKAGE SMOKE PASSED:', framework, flush=True)

@@ -27,8 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Numeric string conveniences cover signed and unsigned 8/16/32/64-bit integers; overflow and non-finite conversions fail instead of reporting success.
 - Half/float/double dictionary-key conversions reject NaN and infinities while retaining native finite-key parsing.
 - Explicit converters take precedence over convenience conversions; member/type number-handling settings remain effective for scalars, nullable values and numeric collections.
+- Ignored properties no longer cause typed reads to fail because of their unused collection population and number policies.
 - Path discovery escapes reserved characters and includes nulls and empty containers.
 - Sonar uses checkout plus the .NET scanner begin/build/end workflow and coverage import.
+- Simplified parser, tree mutation and conversion helpers to satisfy Sonar maintainability rules without suppressions; corrected exception parameter names and allocation warnings.
+- Package smoke tests resolve the installed SDK from PATH instead of accepting an executable argument. Python release checks now exercise missing versions, publication failures, immutable package identity and release-note extraction, with coverage imported into Sonar.
 - Release version is no longer hardcoded or changed after compilation; only a matching version tag publishes the tested artifact.
 - Publication retries verify existing package contents and retry symbol publication independently.
 - Removed the obsolete vulnerable SourceLink package reference in favor of the pinned SDK tooling and updated test dependencies.

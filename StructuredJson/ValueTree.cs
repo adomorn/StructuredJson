@@ -19,33 +19,45 @@ internal static class ValueTree
         if (++count > options.MaxNodeCount) throw new ArgumentException("Value exceeds MaxNodeCount.");
         switch (element.ValueKind)
         {
-            case JsonValueKind.Object:
-                if (++depth > options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.");
-                var dictionary = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var property in element.EnumerateObject())
-                {
-                    string key;
-                    try { key = property.Name; }
-                    catch (InvalidOperationException error) { throw new ArgumentException("JSON property names must contain valid Unicode.", error); }
-                    if (!dictionary.TryAdd(key, Import(property.Value, options, depth, ref count)))
-                        throw new ArgumentException("Duplicate JSON property names are not supported.");
-                }
-                return dictionary;
-            case JsonValueKind.Array:
-                if (++depth > options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.");
-                if (element.GetArrayLength() > options.MaxArrayLength) throw new ArgumentException("Array exceeds MaxArrayLength.");
-                var list = new List<object?>(element.GetArrayLength());
-                foreach (var item in element.EnumerateArray()) list.Add(Import(item, options, depth, ref count));
-                return list;
-            case JsonValueKind.String:
-                try { return element.GetString(); }
-                catch (InvalidOperationException error) { throw new ArgumentException("JSON strings must contain valid Unicode.", error); }
+            case JsonValueKind.Object: return ImportObject(element, options, depth + 1, ref count);
+            case JsonValueKind.Array: return ImportArray(element, options, depth + 1, ref count);
+            case JsonValueKind.String: return ImportString(element);
             case JsonValueKind.True: return true;
             case JsonValueKind.False: return false;
             case JsonValueKind.Null: return null;
             case JsonValueKind.Number: return element.Clone();
             default: throw new ArgumentException("Undefined JSON values are not supported.");
         }
+    }
+
+    private static Dictionary<string, object?> ImportObject(JsonElement element, StructuredJsonOptions options, int depth, ref int count)
+    {
+        if (depth > options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.");
+        var dictionary = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            string key;
+            try { key = property.Name; }
+            catch (InvalidOperationException error) { throw new ArgumentException("JSON property names must contain valid Unicode.", error); }
+            if (!dictionary.TryAdd(key, Import(property.Value, options, depth, ref count)))
+                throw new ArgumentException("Duplicate JSON property names are not supported.");
+        }
+        return dictionary;
+    }
+
+    private static List<object?> ImportArray(JsonElement element, StructuredJsonOptions options, int depth, ref int count)
+    {
+        if (depth > options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.");
+        if (element.GetArrayLength() > options.MaxArrayLength) throw new ArgumentException("Array exceeds MaxArrayLength.");
+        var list = new List<object?>(element.GetArrayLength());
+        foreach (var item in element.EnumerateArray()) list.Add(Import(item, options, depth, ref count));
+        return list;
+    }
+
+    private static string? ImportString(JsonElement element)
+    {
+        try { return element.GetString(); }
+        catch (InvalidOperationException error) { throw new ArgumentException("JSON strings must contain valid Unicode.", error); }
     }
 
     internal static int Count(object? node) => node switch
@@ -89,43 +101,47 @@ internal static class ValueTree
         if (value is null) return default(T) is null;
         try
         {
-            bool explicitConverter = NumberHandlingPolicy.HasExplicitConverter(options.SerializerOptions, typeof(T));
-            if (typeof(T) == typeof(object) && !explicitConverter) { result = (T?)Export(value); return true; }
-            if (typeof(T) == typeof(string) && value is JsonElement numeric && !explicitConverter)
-            { result = (T)(object)numeric.GetRawText(); return true; }
-            var target = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-            if (value is string text && IsNumeric(target) && !explicitConverter)
-            {
-                var culture = options.NumberCulture;
-                object number = Type.GetTypeCode(target) switch
-                {
-                    TypeCode.SByte => sbyte.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.Byte => byte.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.Int16 => short.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.UInt16 => ushort.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.Int32 => int.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.UInt32 => uint.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.Int64 => long.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.UInt64 => ulong.Parse(text, NumberStyles.Integer, culture),
-                    TypeCode.Single => float.Parse(text, NumberStyles.Float, culture),
-                    TypeCode.Double => double.Parse(text, NumberStyles.Float, culture),
-                    TypeCode.Decimal => decimal.Parse(text, NumberStyles.Float, culture),
-                    _ => throw new InvalidCastException()
-                };
-                if (number is double d && !double.IsFinite(d) || number is float f && !float.IsFinite(f)) return false;
-                result = (T)number;
-                return true;
-            }
-            result = value is JsonElement element
-                ? element.Deserialize<T>(options.SerializerOptions)
-                : JsonSerializer.Deserialize<T>(Serialize(value, options.SerializerOptions), options.SerializerOptions);
-            if (result is double nonfinite && !double.IsFinite(nonfinite) || result is float nonfiniteFloat && !float.IsFinite(nonfiniteFloat))
+            result = ConvertValue<T>(value, options);
+            if (IsNonFinite(result))
             { result = default; return false; }
             return true;
         }
         catch (Exception e) when (e is JsonException or NotSupportedException or FormatException or OverflowException or InvalidCastException)
         { result = default; return false; }
     }
+
+    private static T? ConvertValue<T>(object value, StructuredJsonOptions options)
+    {
+        bool explicitConverter = NumberHandlingPolicy.HasExplicitConverter(options.SerializerOptions, typeof(T));
+        if (typeof(T) == typeof(object) && !explicitConverter) return (T?)Export(value);
+        if (typeof(T) == typeof(string) && value is JsonElement numeric && !explicitConverter)
+            return (T)(object)numeric.GetRawText();
+        var target = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        if (value is string text && IsNumeric(target) && !explicitConverter)
+            return (T)ParseNumber(text, target, options.NumberCulture);
+        return value is JsonElement element
+            ? element.Deserialize<T>(options.SerializerOptions)
+            : JsonSerializer.Deserialize<T>(Serialize(value, options.SerializerOptions), options.SerializerOptions);
+    }
+
+    private static object ParseNumber(string text, Type target, CultureInfo culture) => Type.GetTypeCode(target) switch
+    {
+        TypeCode.SByte => sbyte.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.Byte => byte.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.Int16 => short.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.UInt16 => ushort.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.Int32 => int.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.UInt32 => uint.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.Int64 => long.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.UInt64 => ulong.Parse(text, NumberStyles.Integer, culture),
+        TypeCode.Single => float.Parse(text, NumberStyles.Float, culture),
+        TypeCode.Double => double.Parse(text, NumberStyles.Float, culture),
+        TypeCode.Decimal => decimal.Parse(text, NumberStyles.Float, culture),
+        _ => throw new InvalidCastException()
+    };
+
+    private static bool IsNonFinite(object? value) =>
+        value is double d && !double.IsFinite(d) || value is float f && !float.IsFinite(f);
 
     internal static string Serialize(object? value, JsonSerializerOptions options)
     {
@@ -144,7 +160,10 @@ internal static class ValueTree
                 foreach (var pair in map) { writer.WritePropertyName(pair.Key); Write(writer, pair.Value); }
                 writer.WriteEndObject(); break;
             case List<object?> list:
-                writer.WriteStartArray(); foreach (var item in list) Write(writer, item); writer.WriteEndArray(); break;
+                writer.WriteStartArray();
+                foreach (var item in list) Write(writer, item);
+                writer.WriteEndArray();
+                break;
             case JsonElement number: number.WriteTo(writer); break;
             case string text: writer.WriteStringValue(text); break;
             case bool boolean: writer.WriteBooleanValue(boolean); break;

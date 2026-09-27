@@ -23,28 +23,28 @@ public sealed class StructuredJsonOptions
 
     internal JsonSerializerOptions InputSerializerOptions { get; private init; } = new();
 
-    internal StructuredJsonOptions Snapshot()
+    internal static StructuredJsonOptions Snapshot(StructuredJsonOptions options)
     {
-        if (MaxDepth is < 1 or > 512) throw new ArgumentOutOfRangeException(nameof(MaxDepth), "Depth must be between 1 and 512.");
-        if (MaxPathLength < 1) throw new ArgumentOutOfRangeException(nameof(MaxPathLength));
-        if (MaxArrayLength < 1) throw new ArgumentOutOfRangeException(nameof(MaxArrayLength));
-        if (MaxNodeCount < 1) throw new ArgumentOutOfRangeException(nameof(MaxNodeCount));
-        ArgumentNullException.ThrowIfNull(NumberCulture);
-        ArgumentNullException.ThrowIfNull(SerializerOptions);
-        if (SerializerOptions.ReferenceHandler is not null) throw new ArgumentException("Reference preservation/ignoring cycles is not supported by the JSON tree.", nameof(SerializerOptions));
-        var serializer = new JsonSerializerOptions(SerializerOptions) { MaxDepth = MaxDepth };
+        if (options.MaxDepth is < 1 or > 512) throw new ArgumentOutOfRangeException(nameof(options), "Depth must be between 1 and 512.");
+        if (options.MaxPathLength < 1) throw new ArgumentOutOfRangeException(nameof(options), "MaxPathLength must be positive.");
+        if (options.MaxArrayLength < 1) throw new ArgumentOutOfRangeException(nameof(options), "MaxArrayLength must be positive.");
+        if (options.MaxNodeCount < 1) throw new ArgumentOutOfRangeException(nameof(options), "MaxNodeCount must be positive.");
+        ArgumentNullException.ThrowIfNull(options.NumberCulture);
+        ArgumentNullException.ThrowIfNull(options.SerializerOptions);
+        if (options.SerializerOptions.ReferenceHandler is not null) throw new ArgumentException("Reference preservation/ignoring cycles is not supported by the JSON tree.", nameof(options));
+        var serializer = new JsonSerializerOptions(options.SerializerOptions) { MaxDepth = options.MaxDepth };
         // Input uses STJ's native contract behavior. Finite converters are needed
         // only for typed reads, where STJ otherwise accepts overflow as infinity.
         var inputSerializer = new JsonSerializerOptions(serializer);
         NumberHandlingPolicy.Configure(serializer);
         return new StructuredJsonOptions
         {
-            MaxDepth = MaxDepth,
-            MaxPathLength = MaxPathLength,
-            MaxArrayLength = MaxArrayLength,
-            MaxNodeCount = MaxNodeCount,
-            OverwriteOnTypeConflict = OverwriteOnTypeConflict,
-            NumberCulture = CultureInfo.ReadOnly((CultureInfo)NumberCulture.Clone()),
+            MaxDepth = options.MaxDepth,
+            MaxPathLength = options.MaxPathLength,
+            MaxArrayLength = options.MaxArrayLength,
+            MaxNodeCount = options.MaxNodeCount,
+            OverwriteOnTypeConflict = options.OverwriteOnTypeConflict,
+            NumberCulture = CultureInfo.ReadOnly((CultureInfo)options.NumberCulture.Clone()),
             SerializerOptions = serializer,
             InputSerializerOptions = inputSerializer
         };

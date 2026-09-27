@@ -9,6 +9,7 @@ namespace StructuredJson.Tests;
 
 public class AdversarialTests
 {
+    private static readonly double[] CollectionValues = { 1.25 };
     [Theory]
     [InlineData(7)]
     [InlineData(81)]
@@ -179,7 +180,7 @@ public class AdversarialTests
     public void CollectionAndTypeNumberHandlingRemainEffective()
     {
         var sj = new StructuredJson();
-        sj.Set("x", new NumberHandlingCollections { Values = new[] { 1.25 }, Map = new() { ["n"] = 2.5f } });
+        sj.Set("x", new NumberHandlingCollections { Values = CollectionValues, Map = new() { ["n"] = 2.5f } });
         using var output = JsonDocument.Parse(sj.ToJson());
         Assert.Equal("1.25", output.RootElement.GetProperty("x").GetProperty("Values")[0].GetString());
         Assert.Equal("2.5", output.RootElement.GetProperty("x").GetProperty("Map").GetProperty("n").GetString());
@@ -340,6 +341,26 @@ public class AdversarialTests
     {
         [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
         public List<double> Values { get; } = new();
+    }
+
+    [Fact]
+    public void IgnoredPopulateCollectionsDoNotAffectTypedReads()
+    {
+        const string json = "{\"Value\":\"1\",\"Ignored\":[\"NaN\"]}";
+        var expected = JsonSerializer.Deserialize<IgnoredPopulateHolder>(json)!;
+        var sj = new StructuredJson("{\"x\":" + json + "}");
+        var actual = sj.GetRequired<IgnoredPopulateHolder>("x")!;
+        Assert.Equal(expected.Value, actual.Value);
+        Assert.Empty(actual.Ignored);
+    }
+
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+    public sealed class IgnoredPopulateHolder
+    {
+        public int Value { get; set; }
+        [JsonIgnore]
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+        public List<double> Ignored { get; } = new();
     }
     public sealed class PopulateTypedNumberHolder
     {

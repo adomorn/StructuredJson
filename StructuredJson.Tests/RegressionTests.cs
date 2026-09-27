@@ -8,6 +8,7 @@ namespace StructuredJson.Tests;
 
 public class RegressionTests
 {
+    private static readonly int[] InitialItems = { 10, 20 };
     [Theory]
     [InlineData("secret[")]
     [InlineData("]secret")]
@@ -47,7 +48,7 @@ public class RegressionTests
     public void ClrArraysCanBeEditedWithoutLosingSiblings()
     {
         var sj = new StructuredJson();
-        sj.Set("items", new[] { 10, 20 });
+        sj.Set("items", InitialItems);
         Assert.Equal(10, sj.Get<int>("items[0]"));
         sj.Set("items[1]", 30);
         Assert.Equal(10, sj.Get<int>("items[0]"));
