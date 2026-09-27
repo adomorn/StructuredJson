@@ -28,10 +28,15 @@ internal static class NumberHandlingPolicy
                 var handling = property.NumberHandling ?? info.NumberHandling ??
                     (info.Options.NumberHandling != options.NumberHandling ? options.NumberHandling : (JsonNumberHandling?)null);
                 var underlying = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                bool numeric = !underlying.IsEnum && Type.GetTypeCode(underlying) is >= TypeCode.SByte and <= TypeCode.Decimal;
+                bool numeric = underlying == typeof(Half) || (!underlying.IsEnum && Type.GetTypeCode(underlying) is >= TypeCode.SByte and <= TypeCode.Decimal);
                 bool relevant = numeric || underlying == typeof(object) ||
                     (underlying != typeof(string) && typeof(IEnumerable).IsAssignableFrom(underlying));
-                if (handling is null || !relevant || property.CustomConverter is not null || HasExplicitConverter(info.Options, property.PropertyType)) continue;
+                if (!relevant || property.CustomConverter is not null || HasExplicitConverter(info.Options, property.PropertyType)) continue;
+                var creation = property.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? info.Options.PreferredObjectCreationHandling;
+                bool scopedType = info.Options.Converters.OfType<CollectionNumberHandlingFactory>().Any(factory => factory.CanConvert(property.PropertyType));
+                if (creation == JsonObjectCreationHandling.Populate && typeof(IEnumerable).IsAssignableFrom(underlying) && (handling is not null || scopedType))
+                    throw new NotSupportedException("Populate cannot be combined with scoped number handling on a collection. Use Replace with a writable property.");
+                if (handling is null) continue;
                 // STJ does not pass member-level NumberHandling into custom converters.
                 // Re-enter this property's declared contract with scoped global settings.
                 property.CustomConverter = (JsonConverter)Activator.CreateInstance(
@@ -44,12 +49,13 @@ internal static class NumberHandlingPolicy
         options.Converters.Add(new CollectionNumberHandlingFactory());
         options.Converters.Add(new FiniteDoubleConverter());
         options.Converters.Add(new FiniteSingleConverter());
+        options.Converters.Add(new FiniteHalfConverter());
     }
 
     internal static bool HasExplicitConverter(JsonSerializerOptions options, Type type)
     {
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
-        return options.Converters.Any(converter => converter is not FiniteDoubleConverter and not FiniteSingleConverter and not CollectionNumberHandlingFactory &&
+        return options.Converters.Any(converter => converter is not FiniteDoubleConverter and not FiniteSingleConverter and not FiniteHalfConverter and not CollectionNumberHandlingFactory &&
             (converter.CanConvert(type) || converter.CanConvert(underlying)));
     }
 
