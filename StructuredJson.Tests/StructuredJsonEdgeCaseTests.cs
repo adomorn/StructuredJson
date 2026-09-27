@@ -163,13 +163,13 @@ namespace StructuredJson.Tests
             var sj = new StructuredJson();
 
             // Act
-            sj.Set("turkish", "Türkçe karakterler: ğüşıöç");
+            sj.Set("latinLetters", "Latin letters: \u011f\u00fc\u015f\u0131\u00f6\u00e7");
             sj.Set("emoji", "🚀 🎉 🌟");
             sj.Set("chinese", "你好世界");
             sj.Set("arabic", "مرحبا بالعالم");
 
             // Assert
-            Assert.Equal("Türkçe karakterler: ğüşıöç", sj.Get("turkish"));
+            Assert.Equal("Latin letters: \u011f\u00fc\u015f\u0131\u00f6\u00e7", sj.Get("latinLetters"));
             Assert.Equal("🚀 🎉 🌟", sj.Get("emoji"));
             Assert.Equal("你好世界", sj.Get("chinese"));
             Assert.Equal("مرحبا بالعالم", sj.Get("arabic"));
