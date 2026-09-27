@@ -48,7 +48,7 @@ jobs:
             /d:sonar.python.version=3.12 \
             /d:sonar.test.inclusions="StructuredJson.Tests/**/*.cs,**/test_*.py" \
             /d:sonar.exclusions="docs/**,benchmarks/**,**/*.png,artifacts/**,TestResults/**" \
-            /d:sonar.coverage.exclusions="examples/**,Example.cs" \
+            /d:sonar.coverage.exclusions="examples/**" \
             /d:sonar.qualitygate.wait=true
           dotnet restore StructuredJson.sln --locked-mode
           dotnet build StructuredJson.sln -c Release --no-restore --no-incremental

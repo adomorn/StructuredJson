@@ -12,6 +12,8 @@ Open an [issue](https://github.com/adomorn/StructuredJson/issues) for a bug or p
 
 ## Style and tests
 
+Write documentation, code comments, example output and contribution descriptions in English. Keep Unicode and culture-specific test coverage; use English labels and Unicode escapes for character fixtures where appropriate. Keep social posts, outreach plans, adoption tracking, internal review reports and agent work plans outside this repository. Store generated verification output as CI artifacts or local ignored files. Maintained examples belong under `examples/` and must run in CI.
+
 Use .editorconfig and the enabled .NET analyzers. Public APIs require XML comments. Tests should check observable behavior, including rejected-operation nonmutation, literal path round trips, number precision, serializer settings and limits. Use deterministic seeds for generated tests. Benchmarks belong in the benchmark project, not timing assertions in unit tests.
 
 ## Release process
