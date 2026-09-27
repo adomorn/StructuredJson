@@ -3,36 +3,53 @@
 [![NuGet](https://img.shields.io/nuget/v/StructuredJson.svg)](https://www.nuget.org/packages/StructuredJson/)
 [![CI](https://github.com/adomorn/StructuredJson/actions/workflows/ci.yml/badge.svg)](https://github.com/adomorn/StructuredJson/actions/workflows/ci.yml)
 
-A bounded JSON object editor for .NET with escaped property paths, nested arrays, lossless JSON numbers and detached reads.
-
-## Supported platforms
-
-StructuredJson **2.0.0 is a stable library release**, targeting `net8.0`, `net9.0`, `net10.0` and `net11.0`. **.NET 11 support is validated against .NET 11 RC1**, a prerelease platform; this does not claim validation against the future final .NET 11 runtime. Use serviced .NET runtime patches.
-
-Building all targets requires the exact .NET 11 RC1 SDK pinned in `global.json`. Runtime consumers on .NET 8/9/10 do not need that SDK. Version 2 removes .NET Standard/.NET Framework targets. See [migration](https://github.com/adomorn/StructuredJson/blob/development/docs/migration-v2.md) and [changelog](https://github.com/adomorn/StructuredJson/blob/development/CHANGELOG.md).
+Read and update nested JSON in C# using paths, without creating model classes.
 
 ```sh
 dotnet add package StructuredJson --version 2.0.0
 ```
 
-## Quick start
-
 ```csharp
 using SJ = StructuredJson.StructuredJson;
 
-var json = new SJ();
-json.Set("user:name", "Ada");
-json.Set("user:scores", new[] { 10, 20 });
-json.Set("user:scores[1]", 30); // preserves the first score
-json.Set("matrix[0][1]", 42);
-json.Set(@"metadata:build\:version", "2.0.0");
-
-int score = json.GetRequired<int>("user:scores[0]");
-bool found = json.TryGet<int>("user:age", out int age);
+var json = new SJ("""{"user":{"name":"Ada","scores":[10,20]}}""");
+json.Set("user:scores[1]", 30);
+json.Set("user:preferences:theme", "dark"); // creates missing objects
+int score = json.GetRequired<int>("user:scores[0]"); // 10
 Console.WriteLine(json.ToJson());
 ```
 
-The alias avoids the namespace/class name ambiguity. A compiled example and package smoke test live in `examples/StructuredJson.Example`.
+Output:
+
+```json
+{
+  "user": {
+    "name": "Ada",
+    "scores": [10, 30],
+    "preferences": { "theme": "dark" }
+  }
+}
+```
+
+Whitespace is condensed here; `ToJson()` pretty-prints by default. The `SJ` alias avoids the namespace/class name ambiguity.
+
+## When to use it
+
+Use StructuredJson when your JSON shape varies and you repeatedly read or update nested values by path:
+
+- **Configuration editing:** update a setting while preserving adjacent values.
+- **API response transformation:** edit nested objects and arrays without a DTO for the entire payload.
+- **Test data:** derive independent JSON fixtures from one baseline.
+
+[Run these three examples](https://github.com/adomorn/StructuredJson/blob/development/examples/README.md), read the [JsonNode comparison](https://github.com/adomorn/StructuredJson/blob/development/docs/jsonnode-comparison.md), or follow the [step-by-step guide](https://github.com/adomorn/StructuredJson/blob/development/docs/guides/update-nested-json-in-csharp.md).
+
+If your schema is stable, typed models with `JsonSerializer` may be clearer. If you already navigate a JSON DOM comfortably, `JsonNode` may be sufficient. StructuredJson adds a path API, detached reads and configurable structural limits; it does not implement JSONPath queries, JSON Schema validation or JSON Patch. Root arrays and Native AOT/trimming are not supported targets.
+
+## Supported platforms
+
+StructuredJson **2.0.0 is a stable library release**, targeting `net8.0`, `net9.0`, `net10.0` and `net11.0`. **.NET 11 support is validated against .NET 11 RC1**, a prerelease platform; this does not claim validation against the future final .NET 11 runtime. CI tests Windows, Linux and macOS. Use serviced .NET runtime patches.
+
+Building all repository targets requires the exact .NET 11 RC1 SDK pinned in `global.json`. Runtime consumers on .NET 8/9/10 do not need that SDK. Version 2 removes .NET Standard/.NET Framework targets. See [migration](https://github.com/adomorn/StructuredJson/blob/development/docs/migration-v2.md) and [changelog](https://github.com/adomorn/StructuredJson/blob/development/CHANGELOG.md).
 
 ## Paths
 
