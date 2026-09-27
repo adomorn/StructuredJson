@@ -1,700 +1,249 @@
-#if NET8_0_OR_GREATER
-// Global usings are enabled for .NET 8+
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
-#else
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-#endif
 
-#if NET8_0_OR_GREATER
-#nullable enable
-#endif
+namespace StructuredJson;
 
-namespace StructuredJson
+/// <summary>A bounded, lossless JSON object editor with escaped property paths and array indices.</summary>
+/// <remarks>Operations are synchronized. Reads return detached snapshots. Multi-call sequences are not atomic.</remarks>
+public class StructuredJson
 {
-    /// <summary>
-    /// A JSON manipulation library that provides path-based API for creating, reading, and updating JSON objects.
-    /// Uses Dictionary&lt;string, object?&gt; as the underlying data structure and System.Text.Json for serialization.
-    /// </summary>
-    public class StructuredJson
+    private readonly object _gate = new();
+    private readonly StructuredJsonOptions _options;
+    private readonly JsonSerializerOptions _outputOptions;
+    private readonly Dictionary<string, object?> _data;
+    private int _nodeCount = 1;
+
+    /// <summary>Creates an empty JSON object.</summary>
+    public StructuredJson() : this(new StructuredJsonOptions()) { }
+
+    /// <summary>Creates an empty JSON object using a snapshot of the supplied settings.</summary>
+    public StructuredJson(StructuredJsonOptions options)
     {
-#if NET8_0_OR_GREATER
-        private readonly Dictionary<string, object?> _data;
-#else
-        private readonly Dictionary<string, object> _data;
-#endif
+        ArgumentNullException.ThrowIfNull(options);
+        _options = StructuredJsonOptions.Snapshot(options);
+        _outputOptions = new JsonSerializerOptions(_options.SerializerOptions) { WriteIndented = true };
+        _data = new(StringComparer.Ordinal);
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the StructuredJson class with an empty data structure.
-        /// </summary>
-        public StructuredJson()
-        {
-#if NET8_0_OR_GREATER
-            _data = new Dictionary<string, object?>();
-#else
-            _data = new Dictionary<string, object>();
-#endif
-        }
+    /// <summary>Parses a JSON object. Non-object roots, duplicate properties and invalid/empty input are rejected.</summary>
+    public StructuredJson(string json) : this(json, new StructuredJsonOptions()) { }
 
-        /// <summary>
-        /// Initializes a new instance of the StructuredJson class from a JSON string.
-        /// </summary>
-        /// <param name="json">The JSON string to parse.</param>
-        /// <exception cref="ArgumentException">Thrown when the JSON string is invalid.</exception>
-        public StructuredJson(string json)
+    /// <summary>Parses a bounded JSON object with the supplied settings.</summary>
+    public StructuredJson(string json, StructuredJsonOptions options) : this(options)
+    {
+        if (string.IsNullOrWhiteSpace(json)) throw new ArgumentException("A JSON object is required.", nameof(json));
+        try
         {
-#if NET8_0_OR_GREATER
-            _data = new Dictionary<string, object?>();
-#else
-            _data = new Dictionary<string, object>();
-#endif
-            if (!string.IsNullOrWhiteSpace(json))
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
             {
-                try
-                {
-                    var jsonElement = JsonSerializer.Deserialize<JsonElement>(json);
-                    PopulateFromJsonElement(jsonElement, _data);
-                }
-                catch (JsonException ex)
-                {
-                    throw new ArgumentException("Invalid JSON string provided.", nameof(json), ex);
-                }
-            }
+                MaxDepth = _options.MaxDepth,
+                AllowTrailingCommas = _options.SerializerOptions.AllowTrailingCommas,
+                CommentHandling = _options.SerializerOptions.ReadCommentHandling
+            });
+            if (document.RootElement.ValueKind != JsonValueKind.Object) throw new ArgumentException("The JSON root must be an object.", nameof(json));
+            var normalized = (Dictionary<string, object?>)ValueTree.Normalize(document.RootElement, _options)!;
+            ValueTree.ValidatePaths(normalized, "", _options.MaxPathLength);
+            _data = normalized;
+            _nodeCount = ValueTree.Count(_data);
         }
+        catch (JsonException e) { throw new ArgumentException("Invalid JSON string provided.", nameof(json), e); }
+    }
 
-        /// <summary>
-        /// Sets a value at the specified path.
-        /// Path syntax: use ':' for object properties and '[]' for arrays (e.g., "user:addresses[0]:city").
-        /// </summary>
-        /// <param name="path">The path where to set the value.</param>
-        /// <param name="value">The value to set.</param>
-        /// <exception cref="ArgumentException">Thrown when the path is null or empty.</exception>
-#if NET8_0_OR_GREATER
-        public void Set(string path, object? value)
-#else
-        public void Set(string path, object value)
-#endif
+    /// <summary>Sets a value atomically. CLR values are copied into the JSON model; incompatible containers throw unless explicitly enabled.</summary>
+    public void Set(string path, object? value)
+    {
+        var tokens = PathParser.Parse(path, _options);
+        object? normalized;
+        try { normalized = ValueTree.Normalize(value, _options); }
+        catch (Exception e) when (e is JsonException or NotSupportedException or ObjectDisposedException)
+        { throw new ArgumentException("Value cannot be represented as bounded JSON.", nameof(value), e); }
+        if (tokens.Count + ValueTree.Height(normalized) > _options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.", nameof(path));
+        ValueTree.ValidatePaths(normalized, Format(tokens), _options.MaxPathLength);
+        lock (_gate) SetNormalized(tokens, normalized, nameof(path));
+    }
+
+    private void SetNormalized(List<PathToken> tokens, object? normalized, string parameterName)
+    {
+        object container = _data;
+        for (int i = 0; i < tokens.Count; i++)
         {
-            if (string.IsNullOrEmpty(path))
-                throw new ArgumentException("Path cannot be null or empty.", nameof(path));
-
-            var pathSegments = ParsePath(path);
-            SetValueAtPath(_data, pathSegments, value);
-        }
-
-        /// <summary>
-        /// Gets a value from the specified path.
-        /// </summary>
-        /// <param name="path">The path to retrieve the value from.</param>
-        /// <returns>The value at the specified path, or null if the path doesn't exist.</returns>
-        /// <exception cref="ArgumentException">Thrown when the path is null or empty.</exception>
-#if NET8_0_OR_GREATER
-        public object? Get(string path)
-#else
-        public object Get(string path)
-#endif
-        {
-            if (string.IsNullOrEmpty(path))
-                throw new ArgumentException("Path cannot be null or empty.", nameof(path));
-
-            var pathSegments = ParsePath(path);
-            return GetValueAtPath(_data, pathSegments);
-        }
-
-        /// <summary>
-        /// Gets a strongly-typed value from the specified path.
-        /// </summary>
-        /// <typeparam name="T">The type to cast the value to.</typeparam>
-        /// <param name="path">The path to retrieve the value from.</param>
-        /// <returns>The value at the specified path cast to type T, or default(T) if the path doesn't exist or casting fails.</returns>
-#if NET8_0_OR_GREATER
-        public T? Get<T>(string path)
-#else
-        public T Get<T>(string path)
-#endif
-        {
-            var value = Get(path);
-            if (value == null)
-                return default(T);
-
-            try
-            {
-                if (value is JsonElement jsonElement)
-                {
-                    return JsonSerializer.Deserialize<T>(jsonElement.GetRawText());
-                }
-
-                if (value is T directValue)
-                    return directValue;
-
-                // Handle specific type conversions
-                var targetType = typeof(T);
-                var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-                // String to number conversions
-                if (value is string stringValue && IsNumericType(underlyingType))
-                {
-                    if (underlyingType == typeof(int) && int.TryParse(stringValue, out int intResult))
-                        return (T)(object)intResult;
-                    if (underlyingType == typeof(long) && long.TryParse(stringValue, out long longResult))
-                        return (T)(object)longResult;
-                    if (underlyingType == typeof(double) && double.TryParse(stringValue, out double doubleResult))
-                        return (T)(object)doubleResult;
-                    if (underlyingType == typeof(decimal) && decimal.TryParse(stringValue, out decimal decimalResult))
-                        return (T)(object)decimalResult;
-                    if (underlyingType == typeof(float) && float.TryParse(stringValue, out float floatResult))
-                        return (T)(object)floatResult;
-                }
-
-                // Number to string conversions
-                if (underlyingType == typeof(string) && IsNumericType(value.GetType()))
-                {
-#if NET8_0_OR_GREATER
-                    return (T)(object)value.ToString()!;
-#else
-                    return (T)(object)value.ToString();
-#endif
-                }
-
-                // Try to convert using JsonSerializer for complex types
-                var json = JsonSerializer.Serialize(value);
-                return JsonSerializer.Deserialize<T>(json);
-            }
-            catch
-            {
-                return default(T);
-            }
-        }
-
-        /// <summary>
-        /// Converts the current data structure to a JSON string.
-        /// </summary>
-        /// <param name="options">JSON serializer options for formatting.</param>
-        /// <returns>A JSON string representation of the data.</returns>
-#if NET8_0_OR_GREATER
-        public string ToJson(JsonSerializerOptions? options = null)
-#else
-        public string ToJson(JsonSerializerOptions options = null)
-#endif
-        {
-            options = options ?? new JsonSerializerOptions { WriteIndented = true };
-            return JsonSerializer.Serialize(_data, options);
-        }
-
-        /// <summary>
-        /// Lists all paths and their corresponding values in the data structure.
-        /// </summary>
-        /// <returns>A dictionary containing all path-value pairs.</returns>
-#if NET8_0_OR_GREATER
-        public Dictionary<string, object?> ListPaths()
-        {
-            var result = new Dictionary<string, object?>();
-#else
-        public Dictionary<string, object> ListPaths()
-        {
-            var result = new Dictionary<string, object>();
-#endif
-            BuildPathList(_data, "", result);
-            return result;
-        }
-
-        /// <summary>
-        /// Checks if a path exists in the data structure.
-        /// </summary>
-        /// <param name="path">The path to check.</param>
-        /// <returns>True if the path exists, false otherwise.</returns>
-        public bool HasPath(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return false;
-
-            try
-            {
-                var pathSegments = ParsePath(path);
-                return PathExists(_data, pathSegments);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Removes a value at the specified path.
-        /// </summary>
-        /// <param name="path">The path to remove.</param>
-        /// <returns>True if the path was found and removed, false otherwise.</returns>
-        public bool Remove(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return false;
-
-            try
-            {
-                var pathSegments = ParsePath(path);
-                return RemoveValueAtPath(_data, pathSegments);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Clears all data from the structure.
-        /// </summary>
-        public void Clear()
-        {
-            _data.Clear();
-        }
-
-        private List<PathSegment> ParsePath(string path)
-        {
-            var segments = new List<PathSegment>();
-            var regex = new Regex(@"([^:\[\]]+)(\[([^\]]*)\])?");
-            var parts = path.Split(':');
-
-            foreach (var part in parts)
-            {
-                if (string.IsNullOrEmpty(part))
-                    continue;
-
-                var match = regex.Match(part);
-                if (match.Success)
-                {
-                    var key = match.Groups[1].Value; // Don't trim to allow whitespace keys
-                    if (string.IsNullOrEmpty(key))
-                        throw new ArgumentException($"Invalid path segment: '{part}'", nameof(path));
-
-                    if (match.Groups[3].Success)
-                    {
-                        var indexString = match.Groups[3].Value;
-
-                        // Check for empty array index
-                        if (string.IsNullOrEmpty(indexString))
-                            throw new ArgumentException($"Empty array index in path: '{part}'", nameof(path));
-
-                        // Check for invalid array index format
-                        if (!int.TryParse(indexString, out int index))
-                            throw new ArgumentException($"Invalid array index '{indexString}' in path: '{part}'",
-                                nameof(path));
-
-                        // Check for negative array index
-                        if (index < 0)
-                            throw new ArgumentException($"Negative array index '{index}' in path: '{part}'",
-                                nameof(path));
-
-                        // Check for multiple array indices (like [0][1])
-                        if (part.Count(c => c == '[') > 1)
-                            throw new ArgumentException($"Multiple array indices not supported in path: '{part}'",
-                                nameof(path));
-
-                        segments.Add(new PathSegment { Key = key, IsArray = true, ArrayIndex = index });
-                    }
-                    else
-                    {
-                        segments.Add(new PathSegment { Key = key, IsArray = false });
-                    }
-                }
-                else
-                {
-                    throw new ArgumentException($"Invalid path segment: '{part}'", nameof(path));
-                }
-            }
-
-            if (segments.Count == 0)
-                throw new ArgumentException("Path resulted in no valid segments", nameof(path));
-
-            return segments;
-        }
-
-#if NET8_0_OR_GREATER
-        private void SetValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments, object? value)
-#else
-        private void SetValueAtPath(Dictionary<string, object> data, List<PathSegment> pathSegments, object value)
-#endif
-        {
-            for (int i = 0; i < pathSegments.Count; i++)
-            {
-                var segment = pathSegments[i];
-                var isLastSegment = i == pathSegments.Count - 1;
-
-                if (segment.IsArray)
-                {
-                    EnsureArrayExists(data, segment.Key, segment.ArrayIndex);
-                    var list = (List<object>)data[segment.Key]!;
-
-                    if (isLastSegment)
-                    {
-                        list[segment.ArrayIndex] = value!;
-                    }
-                    else
-                    {
-                        if (list[segment.ArrayIndex] == null)
-                        {
-#if NET8_0_OR_GREATER
-                            list[segment.ArrayIndex] = new Dictionary<string, object?>();
-#else
-                            list[segment.ArrayIndex] = new Dictionary<string, object>();
-#endif
-                        }
-
-#if NET8_0_OR_GREATER
-                        if (!(list[segment.ArrayIndex] is Dictionary<string, object?> nextData))
-                        {
-                            list[segment.ArrayIndex] = new Dictionary<string, object?>();
-                            nextData = (Dictionary<string, object?>)list[segment.ArrayIndex]!;
-                        }
-                        data = nextData;
-#else
-                        if (!(list[segment.ArrayIndex] is Dictionary<string, object> nextData))
-                        {
-                            list[segment.ArrayIndex] = new Dictionary<string, object>();
-                            nextData = (Dictionary<string, object>)list[segment.ArrayIndex]!;
-                        }
-                        data = nextData;
-#endif
-                    }
-                }
-                else
-                {
-                    if (isLastSegment)
-                    {
-                        data[segment.Key] = value;
-                    }
-                    else
-                    {
-                        if (!data.ContainsKey(segment.Key) || data[segment.Key] == null)
-                        {
-#if NET8_0_OR_GREATER
-                            data[segment.Key] = new Dictionary<string, object?>();
-#else
-                            data[segment.Key] = new Dictionary<string, object>();
-#endif
-                        }
-
-#if NET8_0_OR_GREATER
-                        if (!(data[segment.Key] is Dictionary<string, object?> nextData))
-                        {
-                            data[segment.Key] = new Dictionary<string, object?>();
-                            nextData = (Dictionary<string, object?>)data[segment.Key]!;
-                        }
-                        data = nextData;
-#else
-                        if (!(data[segment.Key] is Dictionary<string, object> nextData))
-                        {
-                            data[segment.Key] = new Dictionary<string, object>();
-                            nextData = (Dictionary<string, object>)data[segment.Key]!;
-                        }
-                        data = nextData;
-#endif
-                    }
-                }
-            }
-        }
-
-#if NET8_0_OR_GREATER
-        private object? GetValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments)
-#else
-        private object GetValueAtPath(Dictionary<string, object> data, List<PathSegment> pathSegments)
-#endif
-        {
-            foreach (var segment in pathSegments)
-            {
-                if (!data.ContainsKey(segment.Key))
-                    return null;
-
-                var value = data[segment.Key];
-                if (value == null)
-                    return null;
-
-                if (segment.IsArray)
-                {
-                    if (!(value is List<object> list))
-                        return null;
-
-                    if (segment.ArrayIndex >= list.Count)
-                        return null;
-
-                    value = list[segment.ArrayIndex];
-                    if (value == null)
-                        return null;
-                }
-
-                if (segment != pathSegments.Last())
-                {
-#if NET8_0_OR_GREATER
-                    if (!(value is Dictionary<string, object?> nextData))
-#else
-                    if (!(value is Dictionary<string, object> nextData))
-#endif
-                        return null;
-                    data = nextData;
-                }
-                else
-                {
-                    return value;
-                }
-            }
-
-            return null;
-        }
-
-#if NET8_0_OR_GREATER
-        private bool PathExists(Dictionary<string, object?> data, List<PathSegment> pathSegments)
-#else
-        private bool PathExists(Dictionary<string, object> data, List<PathSegment> pathSegments)
-#endif
-        {
-            foreach (var segment in pathSegments)
-            {
-                if (!data.ContainsKey(segment.Key))
-                    return false;
-
-                var value = data[segment.Key];
-
-                if (segment.IsArray)
-                {
-                    if (!(value is List<object> list))
-                        return false;
-
-                    if (segment.ArrayIndex >= list.Count)
-                        return false;
-
-                    // For arrays, we need to check if we're at the last segment
-                    if (segment == pathSegments.Last())
-                        return true; // Path exists even if value is null
-                    
-                    value = list[segment.ArrayIndex];
-                    if (value == null)
-                        return false; // Can't navigate further if intermediate value is null
-                }
-
-                if (segment != pathSegments.Last())
-                {
-                    // For intermediate segments, null means we can't navigate further
-                    if (value == null)
-                        return false;
-                        
-#if NET8_0_OR_GREATER
-                    if (!(value is Dictionary<string, object?> nextData))
-#else
-                    if (!(value is Dictionary<string, object> nextData))
-#endif
-                        return false;
-                    data = nextData;
-                }
-            }
-
-            return true;
-        }
-
-#if NET8_0_OR_GREATER
-        private bool RemoveValueAtPath(Dictionary<string, object?> data, List<PathSegment> pathSegments)
-#else
-        private bool RemoveValueAtPath(Dictionary<string, object> data, List<PathSegment> pathSegments)
-#endif
-        {
-            if (pathSegments.Count == 0)
-                return false;
-
-            var lastSegment = pathSegments.Last();
-            var parentSegments = pathSegments.Take(pathSegments.Count - 1).ToList();
-
-            if (parentSegments.Count > 0)
-            {
-                var parentValue = GetValueAtPath(_data, parentSegments);
-                if (parentValue == null)
-                    return false;
-
-#if NET8_0_OR_GREATER
-                if (!(parentValue is Dictionary<string, object?> parentData))
-#else
-                if (!(parentValue is Dictionary<string, object> parentData))
-#endif
-                    return false;
-
-                data = parentData;
-            }
-
-            if (lastSegment.IsArray)
-            {
-                if (!data.ContainsKey(lastSegment.Key))
-                    return false;
-
-                var value = data[lastSegment.Key];
-                if (!(value is List<object> list))
-                    return false;
-
-                if (lastSegment.ArrayIndex >= list.Count)
-                    return false;
-
-                list.RemoveAt(lastSegment.ArrayIndex);
-                return true;
-            }
-            else
-            {
-                return data.Remove(lastSegment.Key);
-            }
-        }
-
-#if NET8_0_OR_GREATER
-        private void EnsureArrayExists(Dictionary<string, object?> data, string key, int index)
-#else
-        private void EnsureArrayExists(Dictionary<string, object> data, string key, int index)
-#endif
-        {
-            if (!data.ContainsKey(key) || !(data[key] is List<object>))
-            {
-                data[key] = new List<object>();
-            }
-
-            var list = (List<object>)data[key]!;
-            while (list.Count <= index)
-            {
-                list.Add(null!);
-            }
-        }
-
-#if NET8_0_OR_GREATER
-        private void BuildPathList(Dictionary<string, object?> data, string currentPath,
-            Dictionary<string, object?> result)
-#else
-        private void BuildPathList(Dictionary<string, object> data, string currentPath,
-            Dictionary<string, object> result)
-#endif
-        {
-            foreach (var kvp in data)
-            {
-                var path = string.IsNullOrEmpty(currentPath) ? kvp.Key : $"{currentPath}:{kvp.Key}";
-
-                if (kvp.Value is List<object> list)
-                {
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        var arrayPath = $"{path}[{i}]";
-                        var item = list[i];
-
-                        if (item != null)
-                        {
-#if NET8_0_OR_GREATER
-                            if (item is Dictionary<string, object?> nestedDict)
-#else
-                            if (item is Dictionary<string, object> nestedDict)
-#endif
-                            {
-                                BuildPathList(nestedDict, arrayPath, result);
-                            }
-                            else
-                            {
-                                result[arrayPath] = item;
-                            }
-                        }
-                    }
-                }
-#if NET8_0_OR_GREATER
-                else if (kvp.Value is Dictionary<string, object?> nestedData)
-#else
-                else if (kvp.Value is Dictionary<string, object> nestedData)
-#endif
-                {
-                    BuildPathList(nestedData, path, result);
-                }
-                else
-                {
-                    result[path] = kvp.Value;
-                }
-            }
-        }
-
-#if NET8_0_OR_GREATER
-        private void PopulateFromJsonElement(JsonElement element, Dictionary<string, object?> target)
-#else
-        private void PopulateFromJsonElement(JsonElement element, Dictionary<string, object> target)
-#endif
-        {
-            switch (element.ValueKind)
-            {
-                case JsonValueKind.Object:
-                    foreach (var property in element.EnumerateObject())
-                    {
-                        target[property.Name] = ConvertJsonElement(property.Value);
-                    }
-                    break;
-            }
-        }
-
-#if NET8_0_OR_GREATER
-        private object? ConvertJsonElement(JsonElement element)
-#else
-        private object ConvertJsonElement(JsonElement element)
-#endif
-        {
-            switch (element.ValueKind)
-            {
-                case JsonValueKind.Object:
-#if NET8_0_OR_GREATER
-                    var obj = new Dictionary<string, object?>();
-#else
-                    var obj = new Dictionary<string, object>();
-#endif
-                    foreach (var property in element.EnumerateObject())
-                    {
-                        obj[property.Name] = ConvertJsonElement(property.Value);
-                    }
-                    return obj;
-
-                case JsonValueKind.Array:
-                    var array = new List<object>();
-                    foreach (var item in element.EnumerateArray())
-                    {
-                        array.Add(ConvertJsonElement(item)!);
-                    }
-                    return array;
-
-                case JsonValueKind.String:
-                    return element.GetString();
-                case JsonValueKind.Number:
-                    if (element.TryGetInt32(out int intValue))
-                        return intValue;
-                    if (element.TryGetInt64(out long longValue))
-                        return longValue;
-                    return element.GetDouble();
-                case JsonValueKind.True:
-                    return true;
-                case JsonValueKind.False:
-                    return false;
-                case JsonValueKind.Null:
-                    return null;
-                default:
-                    return element.Clone();
-            }
-        }
-
-        private static bool IsNumericType(Type type)
-        {
-            return type == typeof(int) || type == typeof(long) || type == typeof(double) ||
-                   type == typeof(decimal) || type == typeof(float) || type == typeof(short) ||
-                   type == typeof(byte) || type == typeof(uint) || type == typeof(ulong) ||
-                   type == typeof(ushort) || type == typeof(sbyte);
-        }
-
-        private class PathSegment
-        {
-            public string Key { get; set; } = string.Empty;
-            public bool IsArray { get; set; }
-            public int ArrayIndex { get; set; }
+            var token = tokens[i];
+            bool exists = TryChild(container, token, out var old);
+            if (i == tokens.Count - 1)
+            { Assign(container, token, old, exists, normalized); return; }
+            if (IsCompatibleContainer(old, tokens[i + 1].IsIndex))
+            { container = old!; continue; }
+            if (old is not null && !_options.OverwriteOnTypeConflict)
+                throw new InvalidOperationException("An intermediate value has an incompatible type. Enable OverwriteOnTypeConflict to replace it.");
+            // Build only the missing/conflicting suffix. Attach once all limits have passed.
+            var branch = BuildBranch(tokens, i, normalized, parameterName);
+            Assign(container, token, old, exists, branch);
+            return;
         }
     }
-}
 
-#if NET8_0_OR_GREATER
-#nullable restore
-#endif
+    private static bool IsCompatibleContainer(object? value, bool needsArray) =>
+        needsArray ? value is List<object?> : value is Dictionary<string, object?>;
+
+    private object? BuildBranch(List<PathToken> tokens, int parentIndex, object? value, string parameterName)
+    {
+        long count = ValueTree.Count(value);
+        object? branch = value;
+        for (int i = tokens.Count - 1; i > parentIndex; i--)
+        {
+            var token = tokens[i];
+            count += token.IsIndex ? (long)token.Index + 1 : 1;
+            if (count > _options.MaxNodeCount) throw new ArgumentException("Value exceeds MaxNodeCount.", parameterName);
+            if (token.IsIndex)
+            {
+                var list = new List<object?>(token.Index + 1);
+                for (int j = 0; j <= token.Index; j++) list.Add(null);
+                list[token.Index] = branch;
+                branch = list;
+            }
+            else branch = new Dictionary<string, object?>(StringComparer.Ordinal) { [token.Key!] = branch };
+        }
+        return branch;
+    }
+
+    /// <summary>Gets a detached value, or null when absent. Non-integral and large numbers are lossless JsonElement tokens.</summary>
+    public object? Get(string path)
+    {
+        var tokens = PathParser.Parse(path, _options);
+        lock (_gate) return Resolve(tokens, out var value) ? ValueTree.Export(value) : null;
+    }
+
+    /// <summary>Gets a typed value or default when missing, null for a nonnullable type, or not convertible.</summary>
+    public T? Get<T>(string path) => TryGet<T>(path, out var value) ? value : default;
+
+    /// <summary>Distinguishes missing or invalid conversion from valid default values. Invalid path syntax throws.</summary>
+    public bool TryGet<T>(string path, out T? value)
+    {
+        var tokens = PathParser.Parse(path, _options);
+        lock (_gate)
+        {
+            value = default;
+            return Resolve(tokens, out var node) && ValueTree.TryConvert(node, _options, out value);
+        }
+    }
+
+    /// <summary>Gets a required typed value, throwing KeyNotFoundException or InvalidCastException instead of silently defaulting.</summary>
+    public T? GetRequired<T>(string path)
+    {
+        var tokens = PathParser.Parse(path, _options);
+        lock (_gate)
+        {
+            if (!Resolve(tokens, out var node)) throw new KeyNotFoundException("The requested path does not exist.");
+            if (!ValueTree.TryConvert<T>(node, _options, out var result)) throw new InvalidCastException("The value cannot be converted to the requested type.");
+            return result;
+        }
+    }
+
+    /// <summary>Tests presence, including null values. Invalid paths return false.</summary>
+    public bool HasPath(string path)
+    {
+        List<PathToken> tokens;
+        try { tokens = PathParser.Parse(path, _options); }
+        catch (ArgumentException) { return false; }
+        lock (_gate) return Resolve(tokens, out _);
+    }
+
+    /// <summary>Removes a property or array element, shifting subsequent indices. Invalid or absent paths return false.</summary>
+    public bool Remove(string path)
+    {
+        List<PathToken> tokens;
+        try { tokens = PathParser.Parse(path, _options); }
+        catch (ArgumentException) { return false; }
+        lock (_gate)
+        {
+            object? parent = _data;
+            for (int i = 0; i < tokens.Count - 1; i++)
+                if (!TryChild(parent, tokens[i], out parent)) return false;
+            var last = tokens[^1];
+            if (!TryChild(parent, last, out var old)) return false;
+            if (last.IsIndex) ((List<object?>)parent!).RemoveAt(last.Index);
+            else ((Dictionary<string, object?>)parent!).Remove(last.Key!);
+            _nodeCount -= ValueTree.Count(old);
+            return true;
+        }
+    }
+
+    /// <summary>Returns escaped leaf paths, including nulls and empty containers. The empty root has no path.</summary>
+    public Dictionary<string, object?> ListPaths()
+    {
+        lock (_gate)
+        {
+            var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var pair in _data) Visit(pair.Value, PathParser.Escape(pair.Key), result);
+            return result;
+        }
+    }
+
+    /// <summary>Serializes with lossless number tokens. The configured structural depth remains enforced.</summary>
+    public string ToJson(JsonSerializerOptions? options = null)
+    {
+        var settings = options is null ? _outputOptions : new JsonSerializerOptions(options) { MaxDepth = _options.MaxDepth };
+        lock (_gate) return ValueTree.Serialize(_data, settings);
+    }
+
+    /// <summary>Removes all properties.</summary>
+    public void Clear() { lock (_gate) { _data.Clear(); _nodeCount = 1; } }
+
+    private void Assign(object container, PathToken token, object? old, bool exists, object? value)
+    {
+        int gaps = token.IsIndex ? Math.Max(0, token.Index - ((List<object?>)container).Count) : 0;
+        long size = (long)_nodeCount - (exists ? ValueTree.Count(old) : 0) + ValueTree.Count(value) + gaps;
+        if (size > _options.MaxNodeCount) throw new ArgumentException("Operation exceeds MaxNodeCount.");
+        if (token.IsIndex)
+        {
+            var list = (List<object?>)container;
+            // Allocate before changing the existing list so allocation failure cannot partially append gaps.
+            list.EnsureCapacity(token.Index + 1);
+            while (list.Count <= token.Index) list.Add(null);
+            list[token.Index] = value;
+        }
+        else ((Dictionary<string, object?>)container)[token.Key!] = value;
+        _nodeCount = (int)size;
+    }
+
+    private bool Resolve(List<PathToken> tokens, out object? value)
+    {
+        value = _data;
+        foreach (var token in tokens) if (!TryChild(value, token, out value)) return false;
+        return true;
+    }
+
+    private static bool TryChild(object? container, PathToken token, out object? value)
+    {
+        value = null;
+        if (!token.IsIndex) return container is Dictionary<string, object?> map && map.TryGetValue(token.Key!, out value);
+        if (container is not List<object?> list || token.Index >= list.Count) return false;
+        value = list[token.Index]; return true;
+    }
+
+    private static string Format(IEnumerable<PathToken> tokens)
+    {
+        var path = new StringBuilder();
+        foreach (var token in tokens)
+        {
+            if (token.IsIndex)
+                path.Append('[').Append(token.Index.ToString(CultureInfo.InvariantCulture)).Append(']');
+            else
+            {
+                if (path.Length > 0) path.Append(':');
+                path.Append(PathParser.Escape(token.Key!));
+            }
+        }
+        return path.ToString();
+    }
+
+    private static void Visit(object? node, string path, Dictionary<string, object?> result)
+    {
+        if (node is Dictionary<string, object?> map && map.Count > 0)
+            foreach (var pair in map) Visit(pair.Value, path + ":" + PathParser.Escape(pair.Key), result);
+        else if (node is List<object?> list && list.Count > 0)
+            for (int i = 0; i < list.Count; i++) Visit(list[i], path + "[" + i.ToString(CultureInfo.InvariantCulture) + "]", result);
+        else result.Add(path, ValueTree.Export(node));
+    }
+}

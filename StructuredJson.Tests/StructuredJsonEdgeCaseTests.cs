@@ -55,7 +55,7 @@ namespace StructuredJson.Tests
 
             // Act & Assert - Should either work or throw OutOfMemoryException
             var exception = Record.Exception(() => sj.Set("items[999999]", "value"));
-            
+
             if (exception == null)
             {
                 // If it works, verify the value is set
@@ -69,14 +69,14 @@ namespace StructuredJson.Tests
         }
 
         [Fact]
-        public void PathParsing_MultipleArrayIndices_ThrowsOrHandlesGracefully()
+        public void PathParsing_MultipleArrayIndices_SupportsNestedArrays()
         {
             // Arrange
             var sj = new StructuredJson();
 
-            // Act & Assert - items[0][1] should be invalid syntax
-            var exception = Record.Exception(() => sj.Set("items[0][1]", "value"));
-            Assert.NotNull(exception); // Should throw because this syntax is not supported
+            // Repeated indices address nested arrays in v2.
+            sj.Set("items[0][1]", "value");
+            Assert.Equal("value", sj.Get("items[0][1]"));
         }
 
         [Fact]
@@ -245,7 +245,7 @@ namespace StructuredJson.Tests
             // Assert
             var retrieved = sj.Get("user");
             Assert.NotNull(retrieved);
-            
+
             // Should be able to serialize back to JSON
             var json = sj.ToJson();
             Assert.Contains("John", json);
@@ -257,10 +257,10 @@ namespace StructuredJson.Tests
         #region Array Handling Edge Cases
 
         [Fact]
-        public void ArrayHandling_ConvertArrayToObject_HandlesCorrectly()
+        public void ArrayHandling_ConvertArrayToObject_WhenExplicitlyEnabled()
         {
             // Arrange
-            var sj = new StructuredJson();
+            var sj = new StructuredJson(new StructuredJsonOptions { OverwriteOnTypeConflict = true });
             sj.Set("data[0]", "item1");
             sj.Set("data[1]", "item2");
 
@@ -274,10 +274,10 @@ namespace StructuredJson.Tests
         }
 
         [Fact]
-        public void ArrayHandling_ConvertObjectToArray_HandlesCorrectly()
+        public void ArrayHandling_ConvertObjectToArray_WhenExplicitlyEnabled()
         {
             // Arrange
-            var sj = new StructuredJson();
+            var sj = new StructuredJson(new StructuredJsonOptions { OverwriteOnTypeConflict = true });
             sj.Set("data:name", "John");
             sj.Set("data:age", 30);
 
@@ -322,15 +322,15 @@ namespace StructuredJson.Tests
             // Assert
             Assert.Equal("first", sj.Get("items[0]"));
             Assert.Equal("hundred", sj.Get("items[100]"));
-            
+
             // Check some middle indices are null
             Assert.Null(sj.Get("items[50]"));
             Assert.Null(sj.Get("items[99]"));
-            
+
             // Verify array size
             var paths = sj.ListPaths();
             var arrayPaths = paths.Keys.Where(k => k.StartsWith("items[")).ToList();
-            Assert.Equal(2, arrayPaths.Count); // Only non-null items should be listed
+            Assert.Equal(101, arrayPaths.Count); // Null gaps are discoverable in v2.
         }
 
         [Fact]
@@ -404,7 +404,7 @@ namespace StructuredJson.Tests
             // Assert
             Assert.Equal("item0", sj.Get("items[0]"));
             Assert.Equal("item99", sj.Get("items[99]"));
-            
+
             var paths = sj.ListPaths();
             var arrayPaths = paths.Keys.Where(k => k.StartsWith("items[")).ToList();
             Assert.Equal(100, arrayPaths.Count);
@@ -509,7 +509,7 @@ namespace StructuredJson.Tests
             var singleQuotedJson = """{'name': 'John', 'age': 30}"""; // Single quotes
 
             // Act & Assert
-            
+
             // 1. Standard JSON should work
             var sj1 = new StructuredJson(standardJson);
             Assert.Equal("John", sj1.Get("name"));
@@ -541,7 +541,7 @@ namespace StructuredJson.Tests
 
             // Act & Assert
             var exception = Record.Exception(() => new StructuredJson(mixedJson));
-            
+
             // System.Text.Json should reject this format
             Assert.NotNull(exception);
             Assert.IsType<ArgumentException>(exception);
@@ -564,7 +564,7 @@ namespace StructuredJson.Tests
 
             // Act & Assert
             var exception = Record.Exception(() => new StructuredJson(singleQuotedJson));
-            
+
             // System.Text.Json should reject this format
             Assert.NotNull(exception);
             Assert.IsType<ArgumentException>(exception);
@@ -580,18 +580,18 @@ namespace StructuredJson.Tests
             // Arrange
             var sj = new StructuredJson();
             sj.Set("stringNumber", "123");
-            
+
             // Test both English (dot) and Turkish (comma) decimal formats
             sj.Set("stringDecimalDot", "123.45");
             sj.Set("stringDecimalComma", "123,45");
 
             // Act & Assert
             Assert.Equal(123, sj.Get<int>("stringNumber"));
-            
+
             // Test the format that works in current locale
             var dotResult = sj.Get<double>("stringDecimalDot");
             var commaResult = sj.Get<double>("stringDecimalComma");
-            
+
             // At least one should parse correctly to 123.45
             Assert.True(Math.Abs(dotResult - 123.45) < 0.01 || Math.Abs(commaResult - 123.45) < 0.01,
                        $"Expected either dot format (got {dotResult}) or comma format (got {commaResult}) to parse as 123.45");
@@ -607,11 +607,11 @@ namespace StructuredJson.Tests
 
             // Act & Assert
             Assert.Equal("123", sj.Get<string>("number"));
-            
+
             // Handle locale-specific decimal separator (. vs ,)
             var decimalString = sj.Get<string>("decimal");
             Assert.NotNull(decimalString);
-            Assert.True(decimalString.Contains("123.45") || decimalString.Contains("123,45"), 
+            Assert.True(decimalString.Contains("123.45") || decimalString.Contains("123,45"),
                        $"Expected decimal string to contain either '123.45' or '123,45', but got: '{decimalString}'");
         }
 
@@ -679,4 +679,4 @@ namespace StructuredJson.Tests
 
         #endregion
     }
-} 
+}

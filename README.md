@@ -1,473 +1,117 @@
 # StructuredJson
 
-[![NuGet Version](https://img.shields.io/nuget/v/StructuredJson.svg)](https://www.nuget.org/packages/StructuredJson/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET](https://img.shields.io/badge/.NET-Standard%202.0%20%7C%208.0%20%7C%209.0-purple.svg)](https://dotnet.microsoft.com/)
-[![Release NuGet Package](https://github.com/adomorn/StructuredJson/actions/workflows/release.yml/badge.svg)](https://github.com/adomorn/StructuredJson/actions/workflows/release.yml)
-[![SonarCloud analysis](https://github.com/adomorn/StructuredJson/actions/workflows/sonarcloud.yml/badge.svg)](https://github.com/adomorn/StructuredJson/actions/workflows/sonarcloud.yml)
+[![NuGet](https://img.shields.io/nuget/v/StructuredJson.svg)](https://www.nuget.org/packages/StructuredJson/)
+[![CI](https://github.com/adomorn/StructuredJson/actions/workflows/ci.yml/badge.svg)](https://github.com/adomorn/StructuredJson/actions/workflows/ci.yml)
 
-A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Built with `Dictionary<string, object?>` as the underlying data structure and `System.Text.Json` for modern, high-performance serialization.
+A bounded JSON object editor for .NET with escaped property paths, nested arrays, lossless JSON numbers and detached reads.
 
-## ✨ Features
+## Supported platforms
 
-- **🔗 Path-based API**: Intuitive path syntax for navigating and manipulating JSON structures
-- **🌐 Cross-platform**: Full compatibility with .NET Standard 2.0, .NET 8, and .NET 9
-- **⚡ High Performance**: Uses `System.Text.Json` for optimal serialization performance
-- **🔄 Smart Type Conversion**: Intelligent conversion between strings, numbers, and complex types
-- **📋 Full CRUD Operations**: Complete Create, Read, Update, Delete capabilities with robust error handling
-- **🎯 Sparse Array Support**: Efficient handling of arrays with automatic null-filling for gaps
-- **🌍 Unicode Ready**: Full support for international characters, emojis, and special symbols
-- **📊 Path Validation**: Comprehensive validation with meaningful error messages
-- **🔍 Path Discovery**: List all paths and values in your JSON structure
-- **📖 Well Documented**: Complete XML documentation and extensive unit test coverage
+StructuredJson **2.0.0 is a stable library release**, targeting `net8.0`, `net9.0`, `net10.0` and `net11.0`. **.NET 11 support is validated against .NET 11 RC1**, a prerelease platform; this does not claim validation against the future final .NET 11 runtime. Use serviced .NET runtime patches.
 
-## 📦 Installation
+Building all targets requires the exact .NET 11 RC1 SDK pinned in `global.json`. Runtime consumers on .NET 8/9/10 do not need that SDK. Version 2 removes .NET Standard/.NET Framework targets. See [migration](https://github.com/adomorn/StructuredJson/blob/development/docs/migration-v2.md) and [changelog](https://github.com/adomorn/StructuredJson/blob/development/CHANGELOG.md).
 
-Install via NuGet Package Manager:
-
-```bash
-dotnet add package StructuredJson
+```sh
+dotnet add package StructuredJson --version 2.0.0
 ```
 
-Or via Package Manager Console:
-
-```powershell
-Install-Package StructuredJson
-```
-
-Or via PackageReference in your `.csproj`:
-
-```xml
-<PackageReference Include="StructuredJson" Version="1.0.0" />
-```
-
-## 🚀 Quick Start
+## Quick start
 
 ```csharp
+using SJ = StructuredJson.StructuredJson;
+
+var json = new SJ();
+json.Set("user:name", "Ada");
+json.Set("user:scores", new[] { 10, 20 });
+json.Set("user:scores[1]", 30); // preserves the first score
+json.Set("matrix[0][1]", 42);
+json.Set(@"metadata:build\:version", "2.0.0");
+
+int score = json.GetRequired<int>("user:scores[0]");
+bool found = json.TryGet<int>("user:age", out int age);
+Console.WriteLine(json.ToJson());
+```
+
+The alias avoids the namespace/class name ambiguity. A compiled example and package smoke test live in `examples/StructuredJson.Example`.
+
+## Paths
+
+| Meaning | C# verbatim string |
+| --- | --- |
+| Object property | `@"user:name"` |
+| Array element | `@"items[0]"` |
+| Array inside array | `@"matrix[0][1]"` |
+| Literal colon/brackets | `@"a\:b:x\[0\]"` |
+| Literal backslash | `@"folder\\name"` |
+| Empty property name | `@"\e"` |
+| Literal property `\e` | `@"\\e"` |
+
+Properties are ordinal and case-sensitive. Whitespace in keys is significant. Indices contain ASCII digits only. Empty segments, trailing characters, unknown escapes, negative indices and incomplete brackets are rejected. The root must be an object; arrays within it are supported.
+
+## API and failure behavior
+
+- `Set(path, value)` copies/normalizes CLR objects, dictionaries, arrays and JsonElements before mutation. Invalid input or limits raise `ArgumentException`; incompatible intermediate types raise `InvalidOperationException`. Existing data remains unchanged on validation failure. Replacing the final property is intentional; replacing an incompatible intermediate value needs explicit permission.
+- `Get(path)` returns a detached dictionary/list/scalar snapshot or null. Small integers are `int`/`long`; other numbers remain lossless `JsonElement` tokens. Use typed reads for decimal/double/unsigned values.
+- `Get<T>(path)` returns `default(T)` on absence or conversion failure, retaining the convenience API. Invalid syntax throws. Unexpected exceptions from user converters are not swallowed.
+- `TryGet<T>(path, out value)` distinguishes a valid 0/false from absence/conversion failure. Explicit null succeeds for nullable/reference types and fails for nonnullable value types. An absent value always returns false.
+- `GetRequired<T>(path)` throws `KeyNotFoundException` for absence or `InvalidCastException` for conversion failure. Explicit null is valid for nullable/reference types.
+- `HasPath(path)` includes explicit null and null-filled array gaps; malformed paths return false.
+- `Remove(path)` removes a property or shifts array elements; missing/malformed paths return false.
+- `ListPaths()` includes nulls and empty containers. Returned paths are escaped, unique and reusable; the empty root produces an empty dictionary.
+- `ToJson(options)` writes number tokens without precision loss. Only formatting (`WriteIndented`, `Encoder`) is taken from this optional argument; naming policies/converters do not rewrite an already normalized tree.
+- `Clear()` resets the object and its node budget.
+
+JSON constructors reject empty input, duplicate property names and non-object roots. A value such as `1e400` can round-trip as a JSON number token, but conversion to a finite double fails explicitly through `TryGet`/`GetRequired`.
+
+## Limits, conversion and ownership
+
+```csharp
+using System.Globalization;
 using StructuredJson;
+using SJ = StructuredJson.StructuredJson;
 
-// Create a new instance
-var sj = new StructuredJson();
-
-// Set values using intuitive path syntax
-sj.Set("user:name", "John Doe");
-sj.Set("user:age", 30);
-sj.Set("user:isActive", true);
-sj.Set("user:addresses[0]:city", "Ankara");
-sj.Set("user:addresses[0]:country", "Turkey");
-sj.Set("user:addresses[1]:city", "Istanbul");
-
-// Get values with automatic type conversion
-var name = sj.Get("user:name");                    // "John Doe"
-var age = sj.Get<int>("user:age");                 // 30
-var isActive = sj.Get<bool>("user:isActive");      // true
-var city = sj.Get("user:addresses[0]:city");       // "Ankara"
-
-// Convert to beautifully formatted JSON
-var json = sj.ToJson();
-Console.WriteLine(json);
-
-// List all paths and values
-var paths = sj.ListPaths();
-foreach (var kvp in paths)
+var json = new SJ(new StructuredJsonOptions
 {
-    Console.WriteLine($"{kvp.Key}: {kvp.Value}");
-}
-```
-
-## 📍 Path Syntax
-
-StructuredJson uses an intuitive and powerful path syntax with comprehensive validation:
-
-### Object Properties
-Use `:` to navigate object properties:
-```csharp
-sj.Set("user:name", "John");                    // user.name
-sj.Set("config:database:host", "localhost");    // config.database.host
-sj.Set("app:settings:theme", "dark");           // app.settings.theme
-```
-
-### Array Elements
-Use `[index]` to access array elements:
-```csharp
-sj.Set("users[0]", "John");                     // users[0]
-sj.Set("items[2]:name", "Product");             // items[2].name
-sj.Set("data[5]:values[3]", 42);                // data[5].values[3]
-```
-
-### Complex Nested Paths
-Combine objects and arrays seamlessly:
-```csharp
-sj.Set("user:addresses[0]:coordinates:lat", 39.9334);
-sj.Set("products[1]:reviews[0]:rating", 5);
-sj.Set("config:servers[2]:endpoints[0]:url", "https://api.example.com");
-```
-
-### Path Validation
-The library provides comprehensive path validation:
-- ✅ `"user:name"` - Valid object property
-- ✅ `"items[0]"` - Valid array element
-- ✅ `"data:list[5]:value"` - Valid nested path
-- ❌ `"items[]"` - Invalid: empty array index
-- ❌ `"items[-1]"` - Invalid: negative index
-- ❌ `"items[abc]"` - Invalid: non-numeric index
-
-## 🔧 API Reference
-
-### Constructors
-
-```csharp
-// Create empty structure
-var sj = new StructuredJson();
-
-// Create from JSON string (with comprehensive validation)
-var sj = new StructuredJson(jsonString);
-```
-
-### Core Methods
-
-#### Set(string path, object? value)
-Sets a value at the specified path, creating nested structures automatically:
-
-```csharp
-sj.Set("user:name", "John");
-sj.Set("user:addresses[0]:city", "Ankara");
-sj.Set("items[5]", "value");  // Creates sparse array with nulls at 0-4
-
-// Supports all data types
-sj.Set("numbers:int", 42);
-sj.Set("numbers:decimal", 123.45m);
-sj.Set("flags:isActive", true);
-sj.Set("data:nullValue", null);
-sj.Set("text:unicode", "🚀 Türkçe 你好");
-```
-
-**Throws**: `ArgumentException` for invalid paths
-
-#### Get(string path) / Get<T>(string path)
-Retrieves values with intelligent type conversion:
-
-```csharp
-// Basic retrieval
-var name = sj.Get("user:name");          // Returns object
-var age = sj.Get<int>("user:age");       // Returns strongly-typed int
-
-// Smart type conversions
-sj.Set("stringNumber", "42");
-var number = sj.Get<int>("stringNumber");     // Returns 42 (int)
-
-sj.Set("numberString", 123);
-var text = sj.Get<string>("numberString");    // Returns "123" (string)
-
-// Complex type handling
-var user = sj.Get<UserModel>("user");         // Deserializes to custom type
-```
-
-**Type Conversion Features**:
-- String ↔ Number conversions (int, long, double, decimal, float)
-- JsonElement handling for complex deserialization
-- Automatic type detection and conversion
-- Returns `default(T)` for failed conversions
-
-#### HasPath(string path)
-Safely checks if a path exists:
-
-```csharp
-bool exists = sj.HasPath("user:name");        // true/false
-bool invalid = sj.HasPath("invalid[]path");   // false (doesn't throw)
-```
-
-#### Remove(string path)
-Removes values with intelligent array handling:
-
-```csharp
-bool removed = sj.Remove("user:age");         // Removes property
-bool arrayRemoved = sj.Remove("items[1]");    // Removes and shifts array elements
-```
-
-#### ListPaths()
-Discovers all paths and values in your structure:
-
-```csharp
-var paths = sj.ListPaths();
-// Returns: Dictionary<string, object?>
-// Example output:
-// "user:name" -> "John"
-// "user:addresses[0]:city" -> "Ankara"
-// "user:addresses[1]:city" -> "Istanbul"
-```
-
-#### ToJson(JsonSerializerOptions? options = null)
-Converts to JSON with flexible formatting:
-
-```csharp
-var prettyJson = sj.ToJson();                 // Pretty-printed (default)
-var compactJson = sj.ToJson(new JsonSerializerOptions { 
-    WriteIndented = false 
+    MaxDepth = 128,
+    MaxPathLength = 4096,
+    MaxArrayLength = 100_000,
+    MaxNodeCount = 1_000_000,
+    NumberCulture = CultureInfo.InvariantCulture,
+    OverwriteOnTypeConflict = false
 });
 ```
 
-#### Clear()
-Removes all data from the structure:
+These are the defaults. Depth counts containers including the root. Node count includes the root, containers, values and null-filled gaps. Limits apply to stored structures and paths; they are not a maximum transient serialization/input-string memory quota. Sparse writes use ordinary lists and allocate all gaps; they are not a compressed sparse representation.
 
-```csharp
-sj.Clear();  // Structure becomes empty: {}
+Numeric strings use invariant culture by default and reject thousands separators. An explicit `NumberCulture` is supported. Non-finite CLR numbers and cyclic CLR graphs are rejected with default serializer settings. `SerializerOptions` configures CLR input and typed output (custom converters, naming, case sensitivity); options are copied on construction. Reference preservation/cycle ignoring is unsupported. Custom converters define their own JSON representation and should be trusted.
+
+Typed reads cannot combine collection `Populate` behavior with member/type number-handling policies that require a scoped converter: System.Text.Json does not allow those converters to populate an existing collection. `TryGet` returns false and `GetRequired` throws `InvalidCastException` for this combination. Use `Replace` with a writable property. Ordinary collection population without a scoped number policy remains supported; CLR input serialization uses native System.Text.Json behavior.
+
+Input and output collections are detached; mutating them does not change stored data. Operations are synchronized, but a sequence such as `HasPath` followed by `Get` is not a transaction. Use one `TryGet` where appropriate. The API uses reflection-based JSON conversion; Native AOT/trimming support is not claimed.
+
+## Development and validation
+
+Install the SDK in `global.json` and .NET 8/9/10 runtimes (the SDK supplies .NET 11 RC1):
+
+```sh
+dotnet restore StructuredJson.sln --locked-mode
+dotnet build StructuredJson.sln -c Release --no-restore
+dotnet test StructuredJson.Tests/StructuredJson.Tests.csproj -c Release --no-build --no-restore
+dotnet pack StructuredJson/StructuredJson.csproj -c Release --no-build --no-restore -o artifacts
+python3 scripts/package-smoke.py
+python3 scripts/test_release.py
 ```
 
-## 🎯 Advanced Features
+CI runs all four targets on Linux, Windows and macOS. A separate Sonar .NET begin/build/end workflow submits coverage and enforces its configured quality gate; fork PRs use the secret-free CI checks. Maintainers should mark the three CI matrix jobs as required checks in GitHub rulesets.
 
-### Sparse Array Support
-Automatically handles arrays with gaps:
+Benchmarks measure both time and allocations; there is no path cache or unmeasured performance guarantee:
 
-```csharp
-var sj = new StructuredJson();
-sj.Set("items[0]", "first");
-sj.Set("items[5]", "sixth");     // Automatically fills [1-4] with null
-
-var json = sj.ToJson();
-// Result: {"items": ["first", null, null, null, null, "sixth"]}
+```sh
+dotnet run -c Release --project benchmarks/StructuredJson.Benchmarks -- --filter '*'
 ```
 
-### Unicode and International Support
-Full support for international characters:
+## Releases
 
-```csharp
-sj.Set("turkish", "Türkçe karakterler: ğüşıöç");
-sj.Set("emoji", "🚀 🎉 🌟 💻");
-sj.Set("chinese", "你好世界");
-sj.Set("arabic", "مرحبا بالعالم");
+Versions are read from the library csproj. Each release requires a matching dated changelog section. After review and merge, pushing the matching version tag (e.g. `v2.0.0`) reruns CI, publishes its tested package to NuGet, then creates the GitHub release from that version's notes. The `nuget` GitHub environment requires a `NUGET_API_KEY`; configure environment reviewers and protected tags/rulesets before granting release authority. Re-running the same tag can recover a partially completed publication only when the existing NuGet package contents match (excluding NuGet repository signatures); never move a published tag or reuse a version for different bytes.
 
-// All perfectly preserved in JSON output
-```
-
-### Complex Object Handling
-Works seamlessly with custom objects:
-
-```csharp
-public class Address
-{
-    public string City { get; set; }
-    public string Country { get; set; }
-    public double[] Coordinates { get; set; }
-}
-
-var address = new Address 
-{ 
-    City = "Ankara", 
-    Country = "Turkey", 
-    Coordinates = new[] { 39.9334, 32.8597 } 
-};
-
-sj.Set("user:address", address);
-var retrievedAddress = sj.Get<Address>("user:address");
-```
-
-### Performance Optimizations
-Handles large-scale operations efficiently:
-
-```csharp
-// Efficient for large datasets
-for (int i = 0; i < 10000; i++)
-{
-    sj.Set($"data:items[{i}]:id", i);
-    sj.Set($"data:items[{i}]:value", $"Item {i}");
-}
-
-// Fast path-based lookups with O(1) dictionary access
-var item5000 = sj.Get("data:items[5000]:value");
-```
-
-## 📊 Real-World Examples
-
-### User Profile Management
-```csharp
-var profile = new StructuredJson();
-
-// Basic info
-profile.Set("user:id", 12345);
-profile.Set("user:name", "John Doe");
-profile.Set("user:email", "john@example.com");
-profile.Set("user:isVerified", true);
-
-// Multiple addresses
-profile.Set("user:addresses[0]:type", "home");
-profile.Set("user:addresses[0]:street", "123 Main St");
-profile.Set("user:addresses[0]:city", "Ankara");
-profile.Set("user:addresses[0]:country", "Turkey");
-
-profile.Set("user:addresses[1]:type", "work"); 
-profile.Set("user:addresses[1]:street", "456 Business Ave");
-profile.Set("user:addresses[1]:city", "Istanbul");
-profile.Set("user:addresses[1]:country", "Turkey");
-
-// Preferences
-profile.Set("user:preferences:theme", "dark");
-profile.Set("user:preferences:language", "tr-TR");
-profile.Set("user:preferences:notifications:email", true);
-profile.Set("user:preferences:notifications:sms", false);
-
-// Access data
-var homeAddress = profile.Get("user:addresses[0]:city");  // "Ankara"
-var emailNotifications = profile.Get<bool>("user:preferences:notifications:email");  // true
-```
-
-### Configuration Management
-```csharp
-var config = new StructuredJson();
-
-// Database settings
-config.Set("database:host", "localhost");
-config.Set("database:port", 5432);
-config.Set("database:name", "myapp");
-config.Set("database:ssl", true);
-
-// API endpoints
-config.Set("api:endpoints[0]:name", "users");
-config.Set("api:endpoints[0]:url", "/api/v1/users");
-config.Set("api:endpoints[0]:methods[0]", "GET");
-config.Set("api:endpoints[0]:methods[1]", "POST");
-
-config.Set("api:endpoints[1]:name", "products");
-config.Set("api:endpoints[1]:url", "/api/v1/products");
-config.Set("api:endpoints[1]:methods[0]", "GET");
-
-// Feature flags
-config.Set("features:newDashboard", true);
-config.Set("features:betaFeatures", false);
-config.Set("features:maintenanceMode", false);
-
-// Export to configuration file
-File.WriteAllText("appsettings.json", config.ToJson());
-```
-
-### E-commerce Product Catalog
-```csharp
-var catalog = new StructuredJson();
-
-// Product 1
-catalog.Set("products[0]:id", "P001");
-catalog.Set("products[0]:name", "Laptop");
-catalog.Set("products[0]:price", 999.99m);
-catalog.Set("products[0]:currency", "USD");
-catalog.Set("products[0]:inStock", true);
-
-catalog.Set("products[0]:specifications:cpu", "Intel i7");
-catalog.Set("products[0]:specifications:ram", "16GB");
-catalog.Set("products[0]:specifications:storage", "512GB SSD");
-
-catalog.Set("products[0]:reviews[0]:rating", 5);
-catalog.Set("products[0]:reviews[0]:comment", "Excellent laptop!");
-catalog.Set("products[0]:reviews[1]:rating", 4);
-catalog.Set("products[0]:reviews[1]:comment", "Good value for money");
-
-// Product 2
-catalog.Set("products[1]:id", "P002");
-catalog.Set("products[1]:name", "Smartphone");
-catalog.Set("products[1]:price", 599.99m);
-catalog.Set("products[1]:inStock", false);
-
-// Query products
-var laptopPrice = catalog.Get<decimal>("products[0]:price");  // 999.99
-var laptopRating = catalog.Get<int>("products[0]:reviews[0]:rating");  // 5
-var phoneInStock = catalog.Get<bool>("products[1]:inStock");  // false
-```
-
-## 🛠️ Error Handling
-
-StructuredJson provides comprehensive error handling:
-
-```csharp
-try
-{
-    var sj = new StructuredJson();
-    
-    // These will throw ArgumentException with descriptive messages:
-    sj.Set("", "value");           // Empty path
-    sj.Set("items[]", "value");    // Empty array index
-    sj.Set("items[abc]", "value"); // Invalid array index
-    sj.Set("items[-1]", "value");  // Negative array index
-}
-catch (ArgumentException ex)
-{
-    Console.WriteLine($"Path error: {ex.Message}");
-}
-
-try
-{
-    // Invalid JSON in constructor
-    var sj = new StructuredJson("{invalid json}");
-}
-catch (ArgumentException ex)
-{
-    Console.WriteLine($"JSON parsing error: {ex.Message}");
-}
-```
-
-## 🔍 Path Discovery and Debugging
-
-Easily explore your JSON structure:
-
-```csharp
-var sj = new StructuredJson();
-sj.Set("user:name", "John");
-sj.Set("user:addresses[0]:city", "Ankara");
-sj.Set("user:addresses[1]:city", "Istanbul");
-sj.Set("settings:theme", "dark");
-
-// List all paths
-var paths = sj.ListPaths();
-foreach (var kvp in paths)
-{
-    Console.WriteLine($"{kvp.Key}: {kvp.Value}");
-}
-
-// Output:
-// user:name: John
-// user:addresses[0]:city: Ankara
-// user:addresses[1]:city: Istanbul
-// settings:theme: dark
-
-// Check if specific paths exist
-bool hasUserName = sj.HasPath("user:name");        // true
-bool hasUserAge = sj.HasPath("user:age");          // false
-bool hasFirstAddress = sj.HasPath("user:addresses[0]");  // true
-```
-
-## 🏗️ Architecture and Performance
-
-- **Underlying Structure**: `Dictionary<string, object?>` for O(1) key lookups
-- **Serialization**: `System.Text.Json` for modern, high-performance JSON handling
-- **Memory Efficient**: Sparse arrays don't allocate unnecessary memory
-- **Path Parsing**: Optimized regex-based path parsing with caching
-- **Type Conversion**: Lazy evaluation with intelligent fallback strategies
-- **Cross-platform**: Full compatibility across Windows, macOS, and Linux
-
-## 🧪 Framework Compatibility
-
-- **.NET Standard 2.0**: Maximum compatibility with all .NET implementations
-- **.NET 8.0**: Latest performance optimizations and nullable reference types
-- **.NET 9.0**: Cutting-edge features and improvements
-- **Cross-platform**: Windows, macOS, Linux support
-- **Legacy Support**: Works with .NET Framework 4.6.1+
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
-## 📋 Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes and version history.
-
-## 🐛 Issues and Support
-
-- **Bug Reports**: [GitHub Issues](https://github.com/adomorn/StructuredJson/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/adomorn/StructuredJson/discussions)
-- **Documentation**: This README and XML documentation in the code
-
----
-
-**Made with ❤️ for the .NET** 
+See [CONTRIBUTING](https://github.com/adomorn/StructuredJson/blob/development/CONTRIBUTING.md), [SECURITY](https://github.com/adomorn/StructuredJson/blob/development/SECURITY.md), and the [MIT license](https://github.com/adomorn/StructuredJson/blob/development/LICENSE).

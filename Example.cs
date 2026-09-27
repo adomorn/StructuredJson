@@ -1,5 +1,5 @@
 using System;
-using StructuredJson;
+using SJ = StructuredJson.StructuredJson;
 
 namespace StructuredJsonExample
 {
@@ -11,7 +11,7 @@ namespace StructuredJsonExample
             Console.WriteLine("==========================================");
             
             // Yeni bir StructuredJson instance oluştur
-            var sj = new StructuredJson();
+            var sj = new SJ();
             
             // Basit değerler ekle
             sj.Set("user:name", "Ahmet Yılmaz");
@@ -71,7 +71,7 @@ namespace StructuredJsonExample
             }
             """;
             
-            var configSj = new StructuredJson(existingJson);
+            var configSj = new SJ(existingJson);
             Console.WriteLine($"Database Host: {configSj.Get("config:database:host")}");
             Console.WriteLine($"Database Port: {configSj.Get<int>("config:database:port")}");
             Console.WriteLine($"İlk Feature: {configSj.Get("config:features[0]")}");
