@@ -404,6 +404,20 @@ public class AdversarialTests
         Assert.Equal(3, restored.GetRequired<int>("\U0001F600:value"));
     }
 
+    [Fact]
+    public void MalformedJsonUnicodeUsesTheInputErrorContract()
+    {
+        foreach (var json in new[] { "{\"x\":\"\\ud800\"}", "{\"x\":\"\\udc00\"}", "{\"\\ud800\":1}", "{\"\\udc00\":1}" })
+        {
+            Assert.Throws<ArgumentException>(() => new StructuredJson(json));
+            using var document = JsonDocument.Parse(json);
+            var sj = new StructuredJson("{\"target\":42}");
+            string before = sj.ToJson();
+            Assert.Throws<ArgumentException>(() => sj.Set("target", document.RootElement));
+            Assert.Equal(before, sj.ToJson());
+        }
+    }
+
     public sealed record Marker(int Value);
     private sealed class MarkerConverter : JsonConverter<Marker>
     {

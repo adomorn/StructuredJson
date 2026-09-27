@@ -23,8 +23,13 @@ internal static class ValueTree
                 if (++depth > options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.");
                 var dictionary = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var property in element.EnumerateObject())
-                    if (!dictionary.TryAdd(property.Name, Import(property.Value, options, depth, ref count)))
+                {
+                    string key;
+                    try { key = property.Name; }
+                    catch (InvalidOperationException error) { throw new ArgumentException("JSON property names must contain valid Unicode.", error); }
+                    if (!dictionary.TryAdd(key, Import(property.Value, options, depth, ref count)))
                         throw new ArgumentException("Duplicate JSON property names are not supported.");
+                }
                 return dictionary;
             case JsonValueKind.Array:
                 if (++depth > options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.");
@@ -32,7 +37,9 @@ internal static class ValueTree
                 var list = new List<object?>(element.GetArrayLength());
                 foreach (var item in element.EnumerateArray()) list.Add(Import(item, options, depth, ref count));
                 return list;
-            case JsonValueKind.String: return element.GetString();
+            case JsonValueKind.String:
+                try { return element.GetString(); }
+                catch (InvalidOperationException error) { throw new ArgumentException("JSON strings must contain valid Unicode.", error); }
             case JsonValueKind.True: return true;
             case JsonValueKind.False: return false;
             case JsonValueKind.Null: return null;
