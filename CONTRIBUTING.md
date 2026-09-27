@@ -1,51 +1,21 @@
-# Contributing to StructuredJson
+# Contributing
 
-We love your input! We want to make contributing to StructuredJson as easy and transparent as possible, whether it's:
+Open an [issue](https://github.com/adomorn/StructuredJson/issues) for a bug or proposed API change. Security reports use SECURITY.md.
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
-- Becoming a maintainer
+1. Branch from `development`, using a focused name such as `fix/strict-paths`.
+2. Add a regression test that fails before the fix. Do not weaken assertions just to make a failure disappear.
+3. Make the smallest coherent changes, documenting intentional breaking behavior and migration steps.
+4. Install the SDK pinned in global.json and all supported runtimes. Run the README validation commands, including package consumption and release validator tests.
+5. Update CHANGELOG.md in the same PR. The library csproj is the version authority.
+6. Self-review the complete diff, then obtain an independent review before opening/merging the final PR. Keep unrelated changes separate and use meaningful commits.
+7. Open a PR against `development` with the problem, final behavior, compatibility implications and actual test results. All CI matrix jobs must pass before merge; maintainers configure these as required ruleset checks. Do not put tokens in code, logs or comments.
 
-## We Develop with GitHub
-We use GitHub to host code, to track issues and feature requests, as well as accept pull requests.
+## Style and tests
 
-## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html)
-Pull requests are the best way to propose changes to the codebase. We actively welcome your pull requests:
+Use .editorconfig and the enabled .NET analyzers. Public APIs require XML comments. Tests should check observable behavior, including rejected-operation nonmutation, literal path round trips, number precision, serializer settings and limits. Use deterministic seeds for generated tests. Benchmarks belong in the benchmark project, not timing assertions in unit tests.
 
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Make sure your code lints.
-6. Issue that pull request!
+## Release process
 
-## Any contributions you make will be under the MIT Software License
-In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
+After reviewed changes are merged, maintainers validate the csproj version and dated changelog section, then create the matching immutable tag. Release CI tests the tagged source on all supported OS/framework combinations and consumes its package locally. The publish job uses only that tested artifact and the protected `nuget` environment secret. It publishes NuGet before the GitHub release. A version must never be reused for different package contents.
 
-## Report bugs using GitHub's [issue tracker](https://github.com/your-repo/StructuredJson/issues)
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/your-repo/StructuredJson/issues/new); it's that easy!
-
-## Write bug reports with detail, background, and sample code
-
-**Great Bug Reports** tend to have:
-
-- A quick summary and/or background
-- Steps to reproduce
-  - Be specific!
-  - Give sample code if you can.
-- What you expected would happen
-- What actually happens
-- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
-
-## Use a Consistent Coding Style
-
-* Use 4 spaces for indentation rather than tabs
-* Keep line length under 120 characters
-* Use meaningful variable and method names
-* Add XML documentation for public APIs
-* Follow C# coding conventions
-
-## License
-By contributing, you agree that your contributions will be licensed under its MIT License. 
+Fork PRs do not receive Sonar/publishing secrets. Never use pull_request_target to execute fork code with privileged credentials. Contributions are licensed under MIT.

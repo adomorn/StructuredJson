@@ -3,3 +3,13 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/*.DotSettings.user
+
+# Build, review and developer artifacts
+artifacts/
+TestResults/
+.coverage
+.coverage.*
+BenchmarkDotNet.Artifacts/
+*.DotSettings.user
+__pycache__/
+.superpowers/

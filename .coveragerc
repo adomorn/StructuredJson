@@ -1,0 +1,11 @@
+[run]
+branch = True
+source = scripts
+relative_files = True
+parallel = True
+
+[report]
+omit = scripts/test_*.py
+
+[xml]
+output = TestResults/python/coverage.xml

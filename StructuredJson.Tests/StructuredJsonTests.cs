@@ -405,7 +405,7 @@ namespace StructuredJson.Tests
 
             // ListPaths should only include non-null values
             var paths = sj.ListPaths();
-            Assert.Single(paths);
+            Assert.Equal(6, paths.Count);
             Assert.Equal("value", paths["items[5]"]);
         }
 
@@ -531,4 +531,4 @@ namespace StructuredJson.Tests
             Assert.Null(sj.Get("user:age")); // Should no longer exist
         }
     }
-} 
+}

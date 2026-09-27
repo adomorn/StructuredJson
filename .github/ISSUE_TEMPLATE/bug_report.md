@@ -14,11 +14,11 @@ A clear and concise description of what the bug is. Please be as specific as pos
 Please provide a minimal, self-contained code sample that demonstrates the bug. This is the most important part of a bug report.
 
 ```csharp
-using StructuredJson;
+using SJ = StructuredJson.StructuredJson;
 using System;
 
 // 1. Your C# code to set up the StructuredJson object
-var sj = new StructuredJson();
+var sj = new SJ();
 
 // Example:
 // sj.Set("path:to:value", "someValue");
@@ -46,8 +46,8 @@ What was the actual result? Please include any error messages or stack traces.
 
 ### 💻 System Information
 - **OS:** [e.g. Windows 11, Ubuntu 22.04]
-- **.NET Version:** [e.g. .NET 7.0, .NET Framework 4.8]
-- **StructuredJson Version:** [e.g. 1.0.0]
+- **.NET Version:** [e.g. .NET 8, 9, 10, or 11 RC1]
+- **StructuredJson Version:** [e.g. 2.0.0]
 
 ### 📖 Additional Context
 Add any other context about the problem here. For example, is this a recent regression you noticed after updating the library? 

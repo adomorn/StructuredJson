@@ -1,0 +1,49 @@
+name: CI
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Build and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python scripts/validate-release.py
+      - run: python scripts/test_release.py
+      - run: dotnet restore StructuredJson.sln --locked-mode
+      - run: dotnet build StructuredJson.sln -c Release --no-restore
+      - run: dotnet test StructuredJson.Tests/StructuredJson.Tests.csproj -c Release --no-build --no-restore --collect:"XPlat Code Coverage" --results-directory TestResults
+      - run: dotnet pack StructuredJson/StructuredJson.csproj -c Release --no-build --no-restore -o artifacts
+      - run: python scripts/package-smoke.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: nuget-packages
+          path: artifacts/*nupkg
+          if-no-files-found: error
