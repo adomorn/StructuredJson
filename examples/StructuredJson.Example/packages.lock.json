@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "structuredjson": {
+        "type": "Project"
+      }
+    },
+    "net11.0": {
+      "structuredjson": {
+        "type": "Project"
+      }
+    },
+    "net8.0": {
+      "structuredjson": {
+        "type": "Project"
+      }
+    },
+    "net9.0": {
+      "structuredjson": {
+        "type": "Project"
+      }
+    }
+  }
+}

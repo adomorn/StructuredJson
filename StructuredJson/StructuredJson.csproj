@@ -1,56 +1,38 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>netstandard2.0;net8.0;net9.0</TargetFrameworks>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Version>1.0.0</Version>
+        <TargetFrameworks>net8.0;net9.0;net10.0;net11.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>12.0</LangVersion>
+        <Version>2.0.0</Version>
         <Authors>Arda Terekeci</Authors>
         <Company>Arda Terekeci</Company>
-        <Description>A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Built with `Dictionary&lt;string, object?&gt;` as the underlying data structure and `System.Text.Json` for serialization. Supports cross-platform compatibility.</Description>
+        <Description>A powerful .NET library for creating, reading, and updating JSON objects using a path-based API. Bounded, lossless JSON editing for .NET 8, 9, 10 and .NET 11 RC. Supports escaped paths, nested arrays and detached snapshots.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageIcon>icon.png</PackageIcon>
         <RepositoryUrl>https://github.com/adomorn/StructuredJson</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageTags>json;path;dictionary;serialization;deserialization;dotnet;netstandard;net8;net9</PackageTags>
+        <PackageTags>json;path;dictionary;serialization;deserialization;dotnet;net8;net9;net10;net11</PackageTags>
         <PackageReleaseNotes>See CHANGELOG.md for release notes</PackageReleaseNotes>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <EnablePackageValidation>true</EnablePackageValidation>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
         <Deterministic>true</Deterministic>
         <SourceLinkCreate>true</SourceLinkCreate>
         <SourceLinkOriginUrl>https://github.com/adomorn/StructuredJson</SourceLinkOriginUrl>
     </PropertyGroup>
 
-    <!-- .NET 8+ specific settings -->
-    <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0' OR '$(TargetFramework)' == 'net9.0'">
-        <Nullable>enable</Nullable>
-        <ImplicitUsings>enable</ImplicitUsings>
-    </PropertyGroup>
-
-    <!-- .NET Standard 2.0 specific settings -->
-    <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-        <Nullable>disable</Nullable>
-        <ImplicitUsings>disable</ImplicitUsings>
-        <LangVersion>8.0</LangVersion>
-    </PropertyGroup>
-
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\" />
         <None Include="..\icon.png" Pack="true" PackagePath="\" />
+        <None Include="..\CHANGELOG.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-        <PackageReference Include="System.Text.Json" Version="9.0.10" />
-    </ItemGroup>
-
-    <!-- .NET Standard 2.0 specific packages -->
-    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-        <PackageReference Include="Nullable" Version="1.3.1" PrivateAssets="All" />
-    </ItemGroup>
 
 </Project>
