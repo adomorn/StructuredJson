@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Runnable configuration, API transformation and test-fixture examples, plus a checked JsonNode comparison.
-- A practical JSON editing guide and maintainer launch materials with a weekly adoption worksheet.
+- A practical JSON editing guide.
 
 ### Changed
+- Standardized repository documentation and example output on English; kept Unicode character coverage with escaped test data.
+- Removed internal audit reports, raw verification output, agent work plans, IDE files, social-post drafts and adoption tracking from the repository.
+- Removed the uncompiled root example; the maintained runnable examples remain under `examples/`.
 - README now leads with installation, input/output and concrete use cases, with explicit guidance on when to use JsonNode or typed models.
 
 ## [2.0.0] - 2026-09-27

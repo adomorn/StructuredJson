@@ -13,3 +13,11 @@ BenchmarkDotNet.Artifacts/
 *.DotSettings.user
 __pycache__/
 .superpowers/
+
+# Local IDE state and internal working material
+.idea/
+/docs/superpowers/
+/docs/launch/
+/docs/audit-*/
+/docs/audit-*.md
+/docs/v2-remediation.md
