@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 
@@ -16,6 +17,14 @@ internal static class PathParser
     {
         if (string.IsNullOrEmpty(path) || path.Length > options.MaxPathLength)
             throw new ArgumentException("Path must be nonempty and within MaxPathLength.", nameof(path));
+        // JSON replaces unpaired UTF-16 surrogates, which would alias distinct
+        // keys on serialization. Reject them before any lookup or mutation.
+        ReadOnlySpan<char> remaining = path;
+        while (!remaining.IsEmpty)
+        {
+            if (Rune.DecodeFromUtf16(remaining, out _, out int consumed) != OperationStatus.Done) throw Invalid(path);
+            remaining = remaining[consumed..];
+        }
         var tokens = new List<PathToken>();
         int position = 0;
         while (position < path.Length)

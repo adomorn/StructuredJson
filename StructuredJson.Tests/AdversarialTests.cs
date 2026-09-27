@@ -301,6 +301,109 @@ public class AdversarialTests
         public Dictionary<string, object> Extra { get; set; } = new();
     }
 
+    [Fact]
+    public void NonFiniteNumericDictionaryKeysAreRejected()
+    {
+        foreach (var key in new[] { "NaN", "Infinity", "-Infinity" })
+        {
+            var sj = new StructuredJson();
+            sj.Set("x", new Dictionary<string, int> { [key] = 1 });
+            Assert.False(sj.TryGet<Dictionary<double, int>>("x", out _));
+            Assert.False(sj.TryGet<Dictionary<float, int>>("x", out _));
+        }
+        var valid = new StructuredJson("{\"x\":{\"1.25\":1}}");
+        Assert.Equal(1, valid.GetRequired<Dictionary<double, int>>("x")![1.25]);
+        Assert.Equal(1, valid.GetRequired<Dictionary<float, int>>("x")![1.25f]);
+    }
+
+    [Fact]
+    public void PopulateWithScopedNumberPoliciesHasExplicitUnsupportedStatus()
+    {
+        const string json = "{\"Values\":[\"1.25\"]}";
+        Assert.Equal(1.25, JsonSerializer.Deserialize<PopulateNumberHolder>(json)!.Values[0]);
+        var sj = new StructuredJson("{\"x\":" + json + "}");
+        Assert.False(sj.TryGet<PopulateNumberHolder>("x", out _));
+        Assert.Throws<InvalidCastException>(() => sj.GetRequired<PopulateNumberHolder>("x"));
+        Assert.Equal(1.25, JsonSerializer.Deserialize<PopulateTypedNumberHolder>(json)!.Values[0]);
+        Assert.False(sj.TryGet<PopulateTypedNumberHolder>("x", out _));
+        var plain = new StructuredJson("{\"x\":{\"Values\":[1.25]}}");
+        Assert.Equal(1.25, plain.GetRequired<PlainPopulateHolder>("x")!.Values[0]);
+    }
+
+    public sealed class PopulateNumberHolder
+    {
+        [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+        public List<double> Values { get; } = new();
+    }
+    public sealed class PlainPopulateHolder
+    {
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+        public List<double> Values { get; } = new();
+    }
+    public sealed class PopulateTypedNumberHolder
+    {
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+        public StringNumbers Values { get; } = new();
+    }
+
+    [Fact]
+    public void NestedNumericStringsFollowNativeSyntaxAndRejectNonFiniteResults()
+    {
+        var settings = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.AllowReadingFromString };
+        foreach (var text in new[] { "1.25", "+1.25", " 1.25", "1.25 ", "01.25", "1,25", "NaN", "Infinity", "1e400", "1e-9999", "" })
+        {
+            string json = JsonSerializer.Serialize(new { Value = text });
+            bool expected;
+            try { expected = double.IsFinite(JsonSerializer.Deserialize<FloatHolder>(json, settings)!.Value); }
+            catch (JsonException) { expected = false; }
+            var sj = new StructuredJson("{\"x\":" + json + "}", new() { SerializerOptions = settings });
+            Assert.Equal(expected, sj.TryGet<FloatHolder>("x", out _));
+        }
+    }
+
+    [Fact]
+    public void HalfConversionsRejectNonFiniteKeysAndHonorMemberPolicies()
+    {
+        foreach (var key in new[] { "NaN", "Infinity", "-Infinity" })
+        {
+            var sj = new StructuredJson();
+            sj.Set("x", new Dictionary<string, int> { [key] = 1 });
+            Assert.False(sj.TryGet<Dictionary<Half, int>>("x", out _));
+        }
+        var valid = new StructuredJson("{\"map\":{\"1.25\":1},\"holder\":{\"Value\":\"1.25\"},\"overflow\":[1e400]}");
+        Assert.Equal(1, valid.GetRequired<Dictionary<Half, int>>("map")![(Half)1.25]);
+        Assert.Equal((Half)1.25, valid.GetRequired<HalfHolder>("holder")!.Value);
+        Assert.False(valid.TryGet<Half[]>("overflow", out _));
+    }
+
+    public sealed class HalfHolder
+    {
+        [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
+        public Half Value { get; set; }
+    }
+
+    [Fact]
+    public void MalformedUtf16PathsCannotCreateRoundTripKeyCollisions()
+    {
+        string high = new((char)0xD800, 1), low = new((char)0xDC00, 1);
+        var sj = new StructuredJson();
+        sj.Set("\uFFFD", 2);
+        string before = sj.ToJson();
+        foreach (var path in new[] { high, low, "a" + high + "b", low + high, high + ":" + low })
+        {
+            Assert.Throws<ArgumentException>(() => sj.Set(path, 1));
+            Assert.Throws<ArgumentException>(() => sj.Get(path));
+            Assert.False(sj.HasPath(path));
+            Assert.False(sj.Remove(path));
+            Assert.Equal(before, sj.ToJson());
+        }
+        sj.Set("\U0001F600:value", 3);
+        var restored = new StructuredJson(sj.ToJson());
+        Assert.Equal(2, restored.GetRequired<int>("\uFFFD"));
+        Assert.Equal(3, restored.GetRequired<int>("\U0001F600:value"));
+    }
+
     public sealed record Marker(int Value);
     private sealed class MarkerConverter : JsonConverter<Marker>
     {
