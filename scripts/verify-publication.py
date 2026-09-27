@@ -20,19 +20,26 @@ def verify_same(local, remote):
         raise ValueError('This version already exists with different contents. Never reuse a published version.')
 
 
-if __name__ == '__main__':
-    root = pathlib.Path(__file__).resolve().parents[1]
-    version = ET.parse(root / 'StructuredJson/StructuredJson.csproj').findtext('.//Version')
-    package = root / 'artifacts' / ('StructuredJson.' + version + '.nupkg')
+def should_publish(local, version):
     url = 'https://api.nuget.org/v3-flatcontainer/structuredjson/' + version + '/structuredjson.' + version + '.nupkg'
-    should_publish = True
     try:
         with urllib.request.urlopen(url, timeout=60) as response:
-            verify_same(package.read_bytes(), response.read())
-        should_publish = False
+            verify_same(local, response.read())
+        return False
     except urllib.error.HTTPError as error:
         if error.code != 404:
             raise
-    print('Existing package matches' if not should_publish else 'Version is not published')
+        return True
+
+
+def main(root):
+    version = ET.parse(root / 'StructuredJson/StructuredJson.csproj').findtext('.//Version')
+    package = root / 'artifacts' / ('StructuredJson.' + version + '.nupkg')
+    publish = should_publish(package.read_bytes(), version)
+    print('Version is not published' if publish else 'Existing package matches')
     with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-        output.write('should_publish=' + str(should_publish).lower() + '\n')
+        output.write('should_publish=' + str(publish).lower() + '\n')
+
+
+if __name__ == '__main__':
+    main(pathlib.Path(__file__).resolve().parents[1])

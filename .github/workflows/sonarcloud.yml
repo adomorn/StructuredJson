@@ -20,7 +20,14 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install coverage==7.10.7
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
@@ -31,8 +38,26 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           test -n "$SONAR_TOKEN"
-          dotnet sonarscanner begin /k:"adomorn_StructuredJson" /o:"adomorn" /d:sonar.token="$SONAR_TOKEN" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" /d:sonar.exclusions="docs/**,benchmarks/**" /d:sonar.qualitygate.wait=true
+          dotnet sonarscanner begin \
+            /k:"adomorn_StructuredJson" \
+            /o:"adomorn" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" \
+            /d:sonar.python.coverage.reportPaths="TestResults/python/coverage.xml" \
+            /d:sonar.python.version=3.12 \
+            /d:sonar.test.inclusions="StructuredJson.Tests/**/*.cs,**/test_*.py" \
+            /d:sonar.exclusions="docs/**,benchmarks/**,**/*.png,artifacts/**,TestResults/**" \
+            /d:sonar.coverage.exclusions="examples/**,Example.cs" \
+            /d:sonar.qualitygate.wait=true
           dotnet restore StructuredJson.sln --locked-mode
           dotnet build StructuredJson.sln -c Release --no-restore --no-incremental
           dotnet test StructuredJson.Tests/StructuredJson.Tests.csproj -c Release -f net8.0 --no-build --no-restore --collect:"XPlat Code Coverage" --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+          dotnet pack StructuredJson/StructuredJson.csproj -c Release --no-build --no-restore -o artifacts
+          python -m coverage run scripts/test_release.py
+          python -m coverage run scripts/validate-release.py
+          python -m coverage run scripts/release-notes.py
+          python -m coverage run scripts/package-smoke.py
+          python -m coverage combine
+          python -m coverage xml
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"

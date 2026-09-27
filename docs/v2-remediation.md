@@ -60,6 +60,16 @@ This document tracks the 27 September 2026 audit against the v2 implementation. 
 - Tenth fresh whole-change review: **APPROVED, no actionable findings** against implementation commit `0365a22` plus all pending documentation/benchmark files. The reviewer independently tested records, constructor-bound readonly properties, fields, nested collections, global number handling, ordinary Populate, and Half/float/double finite boundaries on .NET 10. All 13 actionable findings from the preceding nine fresh reviews are addressed.
 - Final full local runtime matrix: **140 tests passed per target, 560 executions**, zero failures/skips. Format verification, workflow lint and release-version/tag validators passed.
 
+## Sonar follow-up
+
+- After the token was refreshed, remote analysis authenticated successfully but failed the quality gate: new-code coverage was 76.8% and two executable-selection findings produced security rating C. The failing gate was kept enabled.
+- Split complex parser, mutation, import and conversion methods into focused helpers; corrected exception parameter names, path formatting and array allocation warnings without disabling analyzer rules.
+- Removed the smoke script's arbitrary executable argument; it resolves the installed SDK from PATH. Expanded release-helper tests from two to eleven, including publication failures, existing-package identity and version-specific release notes.
+- Local SonarAnalyzer.CSharp 10.34.0.3385 build: zero warnings/errors. All 140 tests passed on each of four runtimes (560 executions), and rebuilt package consumers passed on all four targets. Python helper line/branch coverage is 97% from unit tests and actual package-smoke execution.
+- Eleventh fresh whole-change review found one P2 issue: ignored Populate collections inherited number policies and rejected otherwise valid typed reads. A differential regression failed before the fix and passed after skipping STJ members with no accessors; constructor-bound readable properties remain processed.
+- After the eleventh-review correction, the complete analyzer build again reported zero warnings/errors, all **141 tests passed per target (564 executions)**, and final package smoke passed on all four runtimes.
+- Sonar now imports Python coverage, declares the Python version and test scope, and excludes the binary icon from text analysis. Compiled examples remain analyzed and are executed as package smoke tests, but are excluded from the unit-coverage denominator.
+
 ## Benchmark interpretation
 
 BenchmarkDotNet ShortRun, one warmup and three measurement iterations, on local .NET 10.0.12 (1,000-item fixture) before final converter hardening: path read ~140 ns / 392 B, path update ~320 ns / 848 B, serialization ~51 microseconds / 242 KB, discovery ~83 microseconds / 252 KB. These are local exploratory measurements, not a regression threshold or performance guarantee. The benchmark source is committed so supported environments can remeasure the final package.

@@ -11,6 +11,7 @@ namespace StructuredJson.Tests;
 
 public class V2ContractTests
 {
+    private static readonly int[] OversizedArray = { 1, 2, 3, 4, 5 };
     [Fact]
     public void TypeConflictRejectsWithoutMutation()
     {
@@ -29,7 +30,7 @@ public class V2ContractTests
         Assert.Throws<ArgumentException>(() => sj.Set("a[4]", 1));
         Assert.Throws<ArgumentException>(() => sj.Set("a[3][3]", 1));
         Assert.Throws<ArgumentException>(() => sj.Set("a:b:c:d:e", 1));
-        Assert.Throws<ArgumentException>(() => sj.Set("a", new[] { 1, 2, 3, 4, 5 }));
+        Assert.Throws<ArgumentException>(() => sj.Set("a", OversizedArray));
         Assert.Throws<ArgumentException>(() => sj.Set("a", new Dictionary<string, object?> { { new string('x', 21), 1 } }));
         Assert.Equal(before, sj.ToJson());
     }

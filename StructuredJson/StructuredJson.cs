@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 namespace StructuredJson;
@@ -20,7 +21,7 @@ public class StructuredJson
     public StructuredJson(StructuredJsonOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _options = options.Snapshot();
+        _options = StructuredJsonOptions.Snapshot(options);
         _outputOptions = new JsonSerializerOptions(_options.SerializerOptions) { WriteIndented = true };
         _data = new(StringComparer.Ordinal);
     }
@@ -59,40 +60,51 @@ public class StructuredJson
         { throw new ArgumentException("Value cannot be represented as bounded JSON.", nameof(value), e); }
         if (tokens.Count + ValueTree.Height(normalized) > _options.MaxDepth) throw new ArgumentException("Value exceeds MaxDepth.", nameof(path));
         ValueTree.ValidatePaths(normalized, Format(tokens), _options.MaxPathLength);
-        lock (_gate)
+        lock (_gate) SetNormalized(tokens, normalized, nameof(path));
+    }
+
+    private void SetNormalized(List<PathToken> tokens, object? normalized, string parameterName)
+    {
+        object container = _data;
+        for (int i = 0; i < tokens.Count; i++)
         {
-            object container = _data;
-            for (int i = 0; i < tokens.Count; i++)
-            {
-                var token = tokens[i];
-                bool exists = TryChild(container, token, out var old);
-                if (i == tokens.Count - 1)
-                { Assign(container, token, old, exists, normalized); return; }
-                bool needsArray = tokens[i + 1].IsIndex;
-                if (old is not null && (needsArray ? old is List<object?> : old is Dictionary<string, object?>))
-                { container = old; continue; }
-                if (old is not null && !_options.OverwriteOnTypeConflict)
-                    throw new InvalidOperationException("An intermediate value has an incompatible type. Enable OverwriteOnTypeConflict to replace it.");
-                // Build only the missing/conflicting suffix. Attach once all limits have passed.
-                long count = ValueTree.Count(normalized);
-                object? branch = normalized;
-                for (int j = tokens.Count - 1; j > i; j--)
-                {
-                    var next = tokens[j];
-                    count += next.IsIndex ? (long)next.Index + 1 : 1;
-                    if (count > _options.MaxNodeCount) throw new ArgumentException("Value exceeds MaxNodeCount.", nameof(path));
-                    if (next.IsIndex)
-                    {
-                        var list = new List<object?>(next.Index + 1);
-                        for (int k = 0; k <= next.Index; k++) list.Add(null);
-                        list[next.Index] = branch; branch = list;
-                    }
-                    else branch = new Dictionary<string, object?>(StringComparer.Ordinal) { [next.Key!] = branch };
-                }
-                Assign(container, token, old, exists, branch);
-                return;
-            }
+            var token = tokens[i];
+            bool exists = TryChild(container, token, out var old);
+            if (i == tokens.Count - 1)
+            { Assign(container, token, old, exists, normalized); return; }
+            if (IsCompatibleContainer(old, tokens[i + 1].IsIndex))
+            { container = old!; continue; }
+            if (old is not null && !_options.OverwriteOnTypeConflict)
+                throw new InvalidOperationException("An intermediate value has an incompatible type. Enable OverwriteOnTypeConflict to replace it.");
+            // Build only the missing/conflicting suffix. Attach once all limits have passed.
+            var branch = BuildBranch(tokens, i, normalized, parameterName);
+            Assign(container, token, old, exists, branch);
+            return;
         }
+    }
+
+    private static bool IsCompatibleContainer(object? value, bool needsArray) =>
+        needsArray ? value is List<object?> : value is Dictionary<string, object?>;
+
+    private object? BuildBranch(List<PathToken> tokens, int parentIndex, object? value, string parameterName)
+    {
+        long count = ValueTree.Count(value);
+        object? branch = value;
+        for (int i = tokens.Count - 1; i > parentIndex; i--)
+        {
+            var token = tokens[i];
+            count += token.IsIndex ? (long)token.Index + 1 : 1;
+            if (count > _options.MaxNodeCount) throw new ArgumentException("Value exceeds MaxNodeCount.", parameterName);
+            if (token.IsIndex)
+            {
+                var list = new List<object?>(token.Index + 1);
+                for (int j = 0; j <= token.Index; j++) list.Add(null);
+                list[token.Index] = branch;
+                branch = list;
+            }
+            else branch = new Dictionary<string, object?>(StringComparer.Ordinal) { [token.Key!] = branch };
+        }
+        return branch;
     }
 
     /// <summary>Gets a detached value, or null when absent. Non-integral and large numbers are lossless JsonElement tokens.</summary>
@@ -212,9 +224,18 @@ public class StructuredJson
 
     private static string Format(IEnumerable<PathToken> tokens)
     {
-        string path = "";
-        foreach (var token in tokens) path += token.IsIndex ? "[" + token.Index.ToString(CultureInfo.InvariantCulture) + "]" : (path.Length == 0 ? "" : ":") + PathParser.Escape(token.Key!);
-        return path;
+        var path = new StringBuilder();
+        foreach (var token in tokens)
+        {
+            if (token.IsIndex)
+                path.Append('[').Append(token.Index.ToString(CultureInfo.InvariantCulture)).Append(']');
+            else
+            {
+                if (path.Length > 0) path.Append(':');
+                path.Append(PathParser.Escape(token.Key!));
+            }
+        }
+        return path.ToString();
     }
 
     private static void Visit(object? node, string path, Dictionary<string, object?> result)
