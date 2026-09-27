@@ -1,83 +1,62 @@
 name: Release NuGet Package
-
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'StructuredJson/**'
-      - '.github/workflows/release.yml'
-      - 'CHANGELOG.md'
-
+    tags: ['v*']
 permissions:
-  contents: write
-  packages: write
-  issues: write
-  pull-requests: write
-
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  version-check:
+  verify:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: verify
     runs-on: ubuntu-latest
-    outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      version: ${{ steps.check.outputs.version }}
+    environment: nuget
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-
-      - name: Set release version
-        id: check
-        run: |
-          echo "should_release=true" >> $GITHUB_OUTPUT
-          echo "version=1.0.0" >> $GITHUB_OUTPUT
-          echo "First release - triggering version 1.0.0"
-
-  build-and-publish:
-    needs: version-check
-    if: needs.version-check.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
-
-      - name: Test
-        run: dotnet test --no-build --configuration Release
-
-      - name: Update version in csproj
-        run: |
-          VERSION="${{ needs.version-check.outputs.version }}"
-          sed -i "s/<Version>.*<\/Version>/<Version>${VERSION}<\/Version>/" StructuredJson/StructuredJson.csproj
-          echo "Updated version to ${VERSION}"
-
-      - name: Pack
-        run: dotnet pack --no-build --configuration Release
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ needs.version-check.outputs.version }}
-          name: Release v${{ needs.version-check.outputs.version }}
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
-          files: StructuredJson/bin/Release/StructuredJson.*.nupkg
+      - name: Require release commit on the default branch
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish to NuGet
-        run: dotnet nuget push StructuredJson/bin/Release/StructuredJson.*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json 
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH"
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/validate-release.py --tag "$RELEASE_TAG"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nuget-packages
+          path: artifacts
+      - name: Verify existing package identity
+        id: identity
+        run: python3 scripts/verify-publication.py
+      - name: Publish tested package to NuGet
+        if: steps.identity.outputs.should_publish == 'true'
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          test -n "$NUGET_API_KEY"
+          dotnet nuget push "artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --no-symbols
+      - name: Publish or recover symbols independently
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          test -n "$NUGET_API_KEY"
+          dotnet nuget push "artifacts/*.snupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Extract this version's release notes
+        run: python3 scripts/release-notes.py > release-notes.md
+      - name: Publish GitHub release after successful package publication
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          body_path: release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: artifacts/*nupkg
+          fail_on_unmatched_files: true
