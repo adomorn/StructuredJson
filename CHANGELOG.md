@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-27
+
+### Added
+- Native .NET 8, 9, 10 and 11 target assemblies. .NET 11 support is validated against RC1 and documented separately from this stable library version.
+- Escaped path properties, empty property names (`\e`) and repeated array indices such as `matrix[0][1]`.
+- `StructuredJsonOptions` with configurable depth, path, array and total-node limits; explicit type-conflict overwrite and numeric culture policies.
+- `TryGet<T>` and `GetRequired<T>` to distinguish missing values, nulls and conversion failures.
+- Detached snapshots and synchronized individual operations.
+- Four-framework/three-OS PR CI, independent local package smoke tests, compiled examples, benchmark harness, dependency locks and release-version/changelog validation.
+
+### Fixed
+- Malformed paths can no longer alias and delete or overwrite valid properties.
+- Paths reject malformed UTF-16 before mutation, preventing replacement-character key collisions while preserving valid Unicode pairs.
+- Malformed Unicode in parsed JSON names and strings follows the documented invalid-input exception contract.
+- JSON number tokens retain their original precision and range through round trips.
+- CLR arrays, typed dictionaries, POCOs and JsonElements use the same traversable tree; updating one field preserves siblings.
+- Stored JsonElements no longer depend on the caller's JsonDocument lifetime.
+- Non-object JSON roots, duplicate properties and empty input are rejected instead of silently losing data.
+- Validation failure leaves existing state unchanged; sparse expansion and nested values obey resource limits.
+- Numeric string conveniences cover signed and unsigned 8/16/32/64-bit integers; overflow and non-finite conversions fail instead of reporting success.
+- Half/float/double dictionary-key conversions reject NaN and infinities while retaining native finite-key parsing.
+- Explicit converters take precedence over convenience conversions; member/type number-handling settings remain effective for scalars, nullable values and numeric collections.
+- Path discovery escapes reserved characters and includes nulls and empty containers.
+- Sonar uses checkout plus the .NET scanner begin/build/end workflow and coverage import.
+- Release version is no longer hardcoded or changed after compilation; only a matching version tag publishes the tested artifact.
+- Publication retries verify existing package contents and retry symbol publication independently.
+- Removed the obsolete vulnerable SourceLink package reference in favor of the pinned SDK tooling and updated test dependencies.
+- Corrected namespace aliases in examples, dependency update coverage and placeholder contribution links; removed personal IDE state.
+
+### Changed / Breaking
+- Removed .NET Standard 2.0 / .NET Framework targets; minimum consumer runtime is .NET 8.
+- Intermediate type conflicts throw by default; opt into `OverwriteOnTypeConflict` for deliberate legacy replacement.
+- Numeric strings use invariant culture and do not accept thousands separators unless a custom converter defines a representation.
+- Untyped non-integral/large numeric reads return lossless JsonElement tokens; use `Get<decimal>`, `Get<double>` or `Get<ulong>` for typed values.
+- `ListPaths` now includes array nulls and empty objects/arrays; returned values are detached.
+- Empty JSON input and ambiguous duplicate properties are errors; unknown/malformed path syntax is strictly rejected.
+- `ToJson` options control formatting only; CLR conversion settings belong in `StructuredJsonOptions.SerializerOptions`.
+- Typed collection reads combining `Populate` with scoped member/type number handling report unsupported conversion; use `Replace` and a writable property. Native CLR input serialization and ordinary population are preserved.
+- Default array length is bounded at 100,000 and default depth at 128. Increase limits explicitly for trusted larger inputs.
+- See [the v2 migration guide](https://github.com/adomorn/StructuredJson/blob/development/docs/migration-v2.md) for concrete upgrade examples.
+
 ## [1.0.0] - 2025-06-13
 
 ### Added
@@ -36,4 +77,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uses System.Text.Json for modern JSON serialization
 - Cross-platform support (Windows, macOS, Linux)
 - Full XML documentation coverage
-- Comprehensive unit test coverage 
+- Comprehensive unit test coverage
