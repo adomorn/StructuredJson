@@ -70,6 +70,8 @@ This document tracks the 27 September 2026 audit against the v2 implementation. 
 - After the eleventh-review correction, the complete analyzer build again reported zero warnings/errors, all **141 tests passed per target (564 executions)**, and final package smoke passed on all four runtimes.
 - Sonar now imports Python coverage, declares the Python version and test scope, and excludes the binary icon from text analysis. Compiled examples remain analyzed and are executed as package smoke tests, but are excluded from the unit-coverage denominator.
 
+- Twelfth fresh whole-change review of `7f22eb7`: **APPROVED, no actionable findings**, including twelve independent STJ differential probes. Remote Linux/Windows/macOS CI and CodeQL passed on that commit; Sonar cleared all prior findings and coverage conditions, then identified the newly added pip installation as allowing source setup scripts. The installer now requires binary wheels. Deprecated Node 20 actions were upgraded to verified, commit-pinned Node 24 releases.
+
 ## Benchmark interpretation
 
 BenchmarkDotNet ShortRun, one warmup and three measurement iterations, on local .NET 10.0.12 (1,000-item fixture) before final converter hardening: path read ~140 ns / 392 B, path update ~320 ns / 848 B, serialization ~51 microseconds / 242 KB, discovery ~83 microseconds / 252 KB. These are local exploratory measurements, not a regression threshold or performance guarantee. The benchmark source is committed so supported environments can remeasure the final package.
