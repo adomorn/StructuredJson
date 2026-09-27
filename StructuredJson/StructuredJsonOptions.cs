@@ -21,6 +21,8 @@ public sealed class StructuredJsonOptions
     /// <summary>Serializer settings for CLR inputs and typed reads. Structural limits take precedence.</summary>
     public JsonSerializerOptions SerializerOptions { get; init; } = new();
 
+    internal JsonSerializerOptions InputSerializerOptions { get; private init; } = new();
+
     internal StructuredJsonOptions Snapshot()
     {
         if (MaxDepth is < 1 or > 512) throw new ArgumentOutOfRangeException(nameof(MaxDepth), "Depth must be between 1 and 512.");
@@ -31,6 +33,9 @@ public sealed class StructuredJsonOptions
         ArgumentNullException.ThrowIfNull(SerializerOptions);
         if (SerializerOptions.ReferenceHandler is not null) throw new ArgumentException("Reference preservation/ignoring cycles is not supported by the JSON tree.", nameof(SerializerOptions));
         var serializer = new JsonSerializerOptions(SerializerOptions) { MaxDepth = MaxDepth };
+        // Input uses STJ's native contract behavior. Finite converters are needed
+        // only for typed reads, where STJ otherwise accepts overflow as infinity.
+        var inputSerializer = new JsonSerializerOptions(serializer);
         NumberHandlingPolicy.Configure(serializer);
         return new StructuredJsonOptions
         {
@@ -40,7 +45,8 @@ public sealed class StructuredJsonOptions
             MaxNodeCount = MaxNodeCount,
             OverwriteOnTypeConflict = OverwriteOnTypeConflict,
             NumberCulture = CultureInfo.ReadOnly((CultureInfo)NumberCulture.Clone()),
-            SerializerOptions = serializer
+            SerializerOptions = serializer,
+            InputSerializerOptions = inputSerializer
         };
     }
 }

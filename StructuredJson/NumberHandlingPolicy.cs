@@ -20,6 +20,9 @@ internal static class NumberHandlingPolicy
             if (info.Kind != JsonTypeInfoKind.Object) return;
             foreach (var property in info.Properties)
             {
+                // Extension data uses STJ's dictionary population contract and holds
+                // raw JSON values, so it must not become a normal property converter.
+                if (property.IsExtensionData) continue;
                 // A member override applies to that value, not unrelated members of
                 // nested POCOs. Restore the caller's global policy at object contracts.
                 var handling = property.NumberHandling ?? info.NumberHandling ??

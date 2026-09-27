@@ -279,6 +279,28 @@ public class AdversarialTests
         public double Double { get; set; } = 1.25;
     }
 
+    [Fact]
+    public void ExtensionDataWithNumberHandlingMatchesSystemTextJson()
+    {
+        var input = new ExtensionNumberHolder { Value = 1.25, Extra = new() { ["a"] = 2.5, ["nested"] = new PlainNumbers() } };
+        var sj = new StructuredJson();
+        sj.Set("x", input);
+        Assert.Equal(JsonSerializer.Serialize(input), sj.GetRequired<JsonElement>("x").GetRawText());
+        var restored = sj.GetRequired<ExtensionNumberHolder>("x")!;
+        Assert.Equal(1.25, restored.Value);
+        Assert.Equal("2.5", ((JsonElement)restored.Extra["a"]).GetString());
+        var overflow = new StructuredJson("{\"x\":{\"Value\":\"1e400\",\"a\":2.5}}");
+        Assert.False(overflow.TryGet<ExtensionNumberHolder>("x", out _));
+    }
+
+    [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
+    public sealed class ExtensionNumberHolder
+    {
+        public double Value { get; set; }
+        [JsonExtensionData]
+        public Dictionary<string, object> Extra { get; set; } = new();
+    }
+
     public sealed record Marker(int Value);
     private sealed class MarkerConverter : JsonConverter<Marker>
     {
