@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explicit converters take precedence over convenience conversions; member/type number-handling settings remain effective for scalars, nullable values and numeric collections.
 - Ignored properties no longer cause typed reads to fail because of their unused collection population and number policies.
 - Path discovery escapes reserved characters and includes nulls and empty containers.
+- CI actions use supported Node 24 runtimes and pinned commits; Python coverage tooling installs wheel packages only.
 - Sonar uses checkout plus the .NET scanner begin/build/end workflow and coverage import.
 - Simplified parser, tree mutation and conversion helpers to satisfy Sonar maintainability rules without suppressions; corrected exception parameter names and allocation warnings.
 - Package smoke tests resolve the installed SDK from PATH instead of accepting an executable argument. Python release checks now exercise missing versions, publication failures, immutable package identity and release-note extraction, with coverage imported into Sonar.
