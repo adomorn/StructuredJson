@@ -9,7 +9,7 @@ internal static class ValueTree
     internal static object? Normalize(object? value, StructuredJsonOptions options)
     {
         if (value is null) return null;
-        var element = value is JsonElement json ? json.Clone() : JsonSerializer.SerializeToElement(value, options.SerializerOptions);
+        var element = value is JsonElement json ? json.Clone() : JsonSerializer.SerializeToElement(value, options.InputSerializerOptions);
         int count = 0;
         return Import(element, options, 0, ref count);
     }
