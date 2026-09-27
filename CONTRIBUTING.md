@@ -16,6 +16,10 @@ Use .editorconfig and the enabled .NET analyzers. Public APIs require XML commen
 
 ## Release process
 
-After reviewed changes are merged, maintainers validate the csproj version and dated changelog section, then create the matching immutable tag. Release CI tests the tagged source on all supported OS/framework combinations and consumes its package locally. The publish job uses only that tested artifact and the protected `nuget` environment secret. It publishes NuGet before the GitHub release. A version must never be reused for different package contents.
+After reviewed changes are merged, maintainers validate the csproj version and dated changelog section, then create the matching immutable tag. Release CI resolves the tag to a commit on the default branch, tests that exact source on all supported OS/framework combinations and consumes its package locally. The publish job uses only that run's tested artifact, rechecks the tag and publishes NuGet before the GitHub release. A version must never be reused for different package contents.
+
+Publishing uses [NuGet Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing) instead of a stored API key. In the `Adomorn` NuGet account, configure a GitHub policy for owner `adomorn`, repository `StructuredJson`, workflow `release.yml`, environment `nuget`, and package `StructuredJson` with new-version publication permission. Protect the GitHub `nuget` environment appropriately. Only the publish job receives `id-token: write`; the pinned NuGet login action exchanges its GitHub identity for a short-lived, masked API key immediately before publication.
+
+To recover a failed release after fixing the workflow, run **Release NuGet Package** manually from the default branch with the original tag (for example `v2.0.0`). Manual execution from another branch is rejected. The workflow tests and publishes the original tag's commit using the updated workflow; it does not move the tag or change the package version. Existing packages must match the tested artifact before symbol or GitHub release recovery can proceed.
 
 Fork PRs do not receive Sonar/publishing secrets. Never use pull_request_target to execute fork code with privileged credentials. Contributions are licensed under MIT.

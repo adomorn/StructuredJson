@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package smoke tests resolve the installed SDK from PATH instead of accepting an executable argument. Python release checks now exercise missing versions, publication failures, immutable package identity and release-note extraction, with coverage imported into Sonar.
 - Release version is no longer hardcoded or changed after compilation; only a matching version tag publishes the tested artifact.
 - Publication retries verify existing package contents and retry symbol publication independently.
+- NuGet Trusted Publishing uses short-lived GitHub OIDC credentials; manual release recovery validates and retests the original immutable tag without moving it.
 - Removed the obsolete vulnerable SourceLink package reference in favor of the pinned SDK tooling and updated test dependencies.
 - Corrected namespace aliases in examples, dependency update coverage and placeholder contribution links; removed personal IDE state.
 
