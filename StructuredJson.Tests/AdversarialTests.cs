@@ -242,6 +242,43 @@ public class AdversarialTests
         public StringNumbers Values { get; set; } = new();
     }
 
+    [Fact]
+    public void BoxedNumberHandlingMatchesSystemTextJson()
+    {
+        object[] values = [1.25, 2.5f, 3, 4m, new FloatHolder { Value = 1.25 }, new PlainNumbers(),
+            new[] { 1.25 }, new List<FloatHolder> { new() { Value = 1.25 } }, new[] { new[] { 1.25 } },
+            new List<object> { 1.25, new PlainNumbers() }, new Dictionary<string, object> { ["n"] = new PlainNumbers() }];
+        foreach (var value in values)
+        {
+            var holder = new BoxedNumberHolder { Value = value };
+            var sj = new StructuredJson();
+            sj.Set("x", holder);
+            Assert.Equal(JsonSerializer.Serialize(holder), sj.GetRequired<JsonElement>("x").GetRawText());
+        }
+        var settings = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.WriteAsString };
+        var strict = new StrictBoxedNumberHolder { Value = 1.25 };
+        var configured = new StructuredJson(new StructuredJsonOptions { SerializerOptions = settings });
+        configured.Set("x", strict);
+        Assert.Equal(JsonSerializer.Serialize(strict, settings), configured.GetRequired<JsonElement>("x").GetRawText());
+    }
+
+    public sealed class BoxedNumberHolder
+    {
+        [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
+        public object Value { get; set; } = null!;
+    }
+    public sealed class StrictBoxedNumberHolder
+    {
+        [JsonNumberHandling(JsonNumberHandling.Strict)]
+        public object Value { get; set; } = null!;
+    }
+    public sealed class PlainNumbers
+    {
+        public int Integer { get; set; } = 3;
+        public decimal Decimal { get; set; } = 4m;
+        public double Double { get; set; } = 1.25;
+    }
+
     public sealed record Marker(int Value);
     private sealed class MarkerConverter : JsonConverter<Marker>
     {

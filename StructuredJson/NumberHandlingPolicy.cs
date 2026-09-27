@@ -20,9 +20,13 @@ internal static class NumberHandlingPolicy
             if (info.Kind != JsonTypeInfoKind.Object) return;
             foreach (var property in info.Properties)
             {
-                var handling = property.NumberHandling ?? info.NumberHandling;
+                // A member override applies to that value, not unrelated members of
+                // nested POCOs. Restore the caller's global policy at object contracts.
+                var handling = property.NumberHandling ?? info.NumberHandling ??
+                    (info.Options.NumberHandling != options.NumberHandling ? options.NumberHandling : (JsonNumberHandling?)null);
                 var underlying = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                bool relevant = underlying == typeof(double) || underlying == typeof(float) ||
+                bool numeric = !underlying.IsEnum && Type.GetTypeCode(underlying) is >= TypeCode.SByte and <= TypeCode.Decimal;
+                bool relevant = numeric || underlying == typeof(object) ||
                     (underlying != typeof(string) && typeof(IEnumerable).IsAssignableFrom(underlying));
                 if (handling is null || !relevant || property.CustomConverter is not null || HasExplicitConverter(info.Options, property.PropertyType)) continue;
                 // STJ does not pass member-level NumberHandling into custom converters.
