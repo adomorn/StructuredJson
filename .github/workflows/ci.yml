@@ -5,6 +5,12 @@ on:
   pull_request:
     branches: [main, development]
   workflow_call:
+    inputs:
+      ref:
+        description: Immutable source commit selected by the release workflow
+        required: false
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -19,6 +25,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: Validate and select release commit
+        if: inputs.ref != ''
+        shell: bash
+        env:
+          RELEASE_COMMIT: ${{ inputs.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          case "$RELEASE_COMMIT" in
+            ''|*[!0-9a-f]*) exit 1 ;;
+          esac
+          test "${#RELEASE_COMMIT}" -eq 40
+          test "$(git rev-parse --verify "$RELEASE_COMMIT^{commit}")" = "$RELEASE_COMMIT"
+          git merge-base --is-ancestor "$RELEASE_COMMIT" "origin/$DEFAULT_BRANCH"
+          git checkout --detach "$RELEASE_COMMIT"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
